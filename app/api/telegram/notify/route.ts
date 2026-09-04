@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { partnerChatLinks } from '@/lib/telegram-bot';
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+const APP_URL = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://couple-app-phi-ruddy.vercel.app';
 
 export async function POST(req: NextRequest) {
   try {
