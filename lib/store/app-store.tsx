@@ -21,6 +21,7 @@ import {
   INITIAL_LOYALTY_CARDS,
 } from './mock-data';
 import { sendPartnerNotification } from '../telegram-bot';
+import { supabase } from '../supabase';
 
 interface AppContextType {
   currentUser: UserProfile;
@@ -64,6 +65,7 @@ interface AppContextType {
 
   // Tasks
   addTask: (task: Omit<TaskItem, 'id' | 'createdAt' | 'coupleId' | 'isCompleted'>) => void;
+  updateTask: (id: string, data: Partial<TaskItem>) => void;
   toggleTask: (id: string) => void;
   toggleSubtask: (taskId: string, subtaskId: string) => void;
   deleteTask: (id: string) => void;
@@ -84,6 +86,8 @@ const STORAGE_KEYS = {
   LOYALTY_CARDS: 'couple_app_loyalty_cards',
 };
 
+const DEFAULT_COUPLE_ID = 'default_couple';
+
 export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const [currentUserId, setCurrentUserId] = useState<string>('user_alex');
   const [couple, setCouple] = useState<CoupleInfo>(INITIAL_COUPLE);
@@ -98,7 +102,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
 
-  // Load saved state from LocalStorage on client mount
+  // Load saved state from LocalStorage on mount
   useEffect(() => {
     try {
       const savedUser = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
@@ -152,13 +156,95 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
             avatar,
           },
         }));
+
+        // Upsert user profile to Supabase
+        if (supabase) {
+          supabase
+            .from('profiles')
+            .upsert(
+              {
+                id: tgId,
+                telegram_id: tgUser.id,
+                name: fullName || 'Пользователь',
+                username: tgUser.username || null,
+                avatar,
+                couple_id: DEFAULT_COUPLE_ID,
+              },
+              { onConflict: 'id' }
+            )
+            .then(({ error }) => {
+              if (error) console.warn('Supabase upsert profile error:', error);
+            });
+        }
       }
     } catch (e) {
-      console.warn('LocalStorage error:', e);
+      console.warn('LocalStorage init error:', e);
     } finally {
       setIsLoaded(true);
     }
   }, []);
+
+  // Fetch data from Supabase if configured
+  useEffect(() => {
+    if (!supabase) return;
+
+    // Fetch tasks
+    supabase
+      .from('tasks')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (!error && data && data.length > 0) {
+          const mappedTasks: TaskItem[] = data.map((row: any) => ({
+            id: row.id,
+            coupleId: row.couple_id || DEFAULT_COUPLE_ID,
+            title: row.title,
+            description: row.description || undefined,
+            assignee: row.assigned_to || 'both',
+            dueDate: row.due_date,
+            isCompleted: Boolean(row.is_completed),
+            isMegaTask: Array.isArray(row.subtasks) && row.subtasks.length > 0,
+            subtasks: Array.isArray(row.subtasks) ? row.subtasks : [],
+            creatorId: row.created_by,
+            createdAt: row.created_at,
+          }));
+          setTasks(mappedTasks);
+        }
+      });
+
+    // Fetch profiles to sync partner details
+    supabase
+      .from('profiles')
+      .select('*')
+      .then(({ data, error }) => {
+        if (!error && data && data.length > 0) {
+          const userA = data.find((p: any) => p.id === currentUserId) || data[0];
+          const userB = data.find((p: any) => p.id !== currentUserId) || data[1];
+
+          if (userA || userB) {
+            setCouple((prev) => ({
+              ...prev,
+              partnerA: userA
+                ? {
+                    ...prev.partnerA,
+                    id: userA.id,
+                    name: userA.name,
+                    avatar: userA.avatar || prev.partnerA.avatar,
+                  }
+                : prev.partnerA,
+              partnerB: userB
+                ? {
+                    ...prev.partnerB,
+                    id: userB.id,
+                    name: userB.name,
+                    avatar: userB.avatar || prev.partnerB.avatar,
+                  }
+                : prev.partnerB,
+            }));
+          }
+        }
+      });
+  }, [currentUserId]);
 
   // Sync theme and dark mode to document DOM
   useEffect(() => {
@@ -235,7 +321,17 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     };
     setDocuments((prev) => [newDoc, ...prev]);
 
-    // Send Telegram Notification
+    if (supabase) {
+      supabase.from('documents').insert({
+        id: newDoc.id,
+        couple_id: DEFAULT_COUPLE_ID,
+        title: newDoc.title,
+        category: newDoc.category,
+        notes: newDoc.notes,
+        file_url: newDoc.fileUrl,
+      }).then();
+    }
+
     sendPartnerNotification({
       senderName: currentUser.name,
       action: 'doc_added',
@@ -245,6 +341,9 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
 
   const deleteDocument = (id: string) => {
     setDocuments((prev) => prev.filter((d) => d.id !== id));
+    if (supabase) {
+      supabase.from('documents').delete().eq('id', id).then();
+    }
   };
 
   // Wishlist
@@ -260,7 +359,22 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     };
     setWishlist((prev) => [newItem, ...prev]);
 
-    // Send Telegram Notification
+    if (supabase) {
+      supabase.from('wishlist_items').insert({
+        id: newItem.id,
+        couple_id: DEFAULT_COUPLE_ID,
+        title: newItem.title,
+        description: newItem.notes,
+        price: newItem.price,
+        currency: newItem.currency,
+        url: newItem.link,
+        image_url: newItem.imageUrl,
+        is_purchased: false,
+        priority: newItem.priority,
+        created_by: currentUser.name,
+      }).then();
+    }
+
     sendPartnerNotification({
       senderName: currentUser.name,
       action: 'wish_added',
@@ -270,6 +384,9 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
 
   const deleteWishlistItem = (id: string) => {
     setWishlist((prev) => prev.filter((w) => w.id !== id));
+    if (supabase) {
+      supabase.from('wishlist_items').delete().eq('id', id).then();
+    }
   };
 
   const toggleReserveWishlist = (id: string) => {
@@ -305,6 +422,9 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
 
   const deleteArchivedItem = (id: string) => {
     setWishlist((prev) => prev.filter((w) => w.id !== id));
+    if (supabase) {
+      supabase.from('wishlist_items').delete().eq('id', id).then();
+    }
   };
 
   // Tasks
@@ -318,13 +438,61 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     };
     setTasks((prev) => [newTask, ...prev]);
 
-    // Send Telegram Notification
+    if (supabase) {
+      supabase.from('tasks').insert({
+        id: newTask.id,
+        couple_id: DEFAULT_COUPLE_ID,
+        title: newTask.title,
+        description: newTask.description,
+        category: 'Общее',
+        assigned_to: newTask.assignee || 'both',
+        due_date: newTask.dueDate,
+        is_completed: false,
+        subtasks: newTask.subtasks || [],
+        created_by: currentUser.name,
+      }).then(({ error }) => {
+        if (error) console.warn('Supabase insert task error:', error);
+      });
+    }
+
     sendPartnerNotification({
       senderName: currentUser.name,
       action: 'task_created',
       itemTitle: newTask.title,
       details: newTask.description,
     });
+  };
+
+  const updateTask = (id: string, data: Partial<TaskItem>) => {
+    setTasks((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, ...data } : t))
+    );
+
+    if (supabase) {
+      const updatePayload: any = {};
+      if (data.title !== undefined) updatePayload.title = data.title;
+      if (data.description !== undefined) updatePayload.description = data.description;
+      if (data.assignee !== undefined) updatePayload.assigned_to = data.assignee;
+      if (data.dueDate !== undefined) updatePayload.due_date = data.dueDate;
+      if (data.subtasks !== undefined) updatePayload.subtasks = data.subtasks;
+      if (data.isCompleted !== undefined) updatePayload.is_completed = data.isCompleted;
+
+      supabase
+        .from('tasks')
+        .update(updatePayload)
+        .eq('id', id)
+        .then(({ error }) => {
+          if (error) console.warn('Supabase update task error:', error);
+        });
+    }
+
+    if (data.title) {
+      sendPartnerNotification({
+        senderName: currentUser.name,
+        action: 'task_updated',
+        itemTitle: data.title,
+      });
+    }
   };
 
   const toggleTask = (id: string) => {
@@ -339,6 +507,14 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
               action: 'task_completed',
               itemTitle: t.title,
             });
+          }
+
+          if (supabase) {
+            supabase
+              .from('tasks')
+              .update({ is_completed: completed })
+              .eq('id', id)
+              .then();
           }
 
           return {
@@ -361,6 +537,15 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
           );
           const allCompleted =
             updatedSubtasks.length > 0 && updatedSubtasks.every((s) => s.isCompleted);
+
+          if (supabase) {
+            supabase
+              .from('tasks')
+              .update({ subtasks: updatedSubtasks, is_completed: allCompleted })
+              .eq('id', taskId)
+              .then();
+          }
+
           return {
             ...t,
             subtasks: updatedSubtasks,
@@ -374,6 +559,9 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
 
   const deleteTask = (id: string) => {
     setTasks((prev) => prev.filter((t) => t.id !== id));
+    if (supabase) {
+      supabase.from('tasks').delete().eq('id', id).then();
+    }
   };
 
   // Sizes
@@ -396,10 +584,22 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       createdAt: new Date().toISOString(),
     };
     setLoyaltyCards((prev) => [newCard, ...prev]);
+    if (supabase) {
+      supabase.from('loyalty_cards').insert({
+        id: newCard.id,
+        couple_id: DEFAULT_COUPLE_ID,
+        store_name: newCard.storeName,
+        barcode: newCard.cardNumber,
+        color: newCard.cardColor,
+      }).then();
+    }
   };
 
   const deleteLoyaltyCard = (id: string) => {
     setLoyaltyCards((prev) => prev.filter((c) => c.id !== id));
+    if (supabase) {
+      supabase.from('loyalty_cards').delete().eq('id', id).then();
+    }
   };
 
   return (
@@ -436,6 +636,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         markAsGifted,
         deleteArchivedItem,
         addTask,
+        updateTask,
         toggleTask,
         toggleSubtask,
         deleteTask,
