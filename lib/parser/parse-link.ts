@@ -28,7 +28,16 @@ function getWildberriesBasket(vol: number): string {
   if (vol <= 3701) return '21';
   if (vol <= 3917) return '22';
   if (vol <= 4133) return '23';
-  return '24';
+  if (vol <= 4349) return '24';
+  if (vol <= 4565) return '25';
+  if (vol <= 4781) return '26';
+  if (vol <= 4997) return '27';
+  if (vol <= 5213) return '28';
+  if (vol <= 5429) return '29';
+  if (vol <= 5645) return '30';
+  if (vol <= 5861) return '31';
+  if (vol <= 6077) return '32';
+  return '33';
 }
 
 /**
@@ -44,7 +53,6 @@ function transliterateSlug(slug: string): string {
   };
 
   const cleanWords = words.map((w) => {
-    // If word is pure digits (article ID), omit it
     if (/^\d+$/.test(w)) return '';
     let res = w.toLowerCase();
     for (const [lat, cyr] of Object.entries(transMap)) {
@@ -67,6 +75,9 @@ function isInvalidTitle(t?: string | null): boolean {
   return (
     lower === 'ozon' ||
     lower === 'wildberries' ||
+    lower.includes('интернет-магазин wildberries') ||
+    lower.includes('широкий ассортимент товаров') ||
+    lower.includes('скидки каждый день') ||
     lower.includes('доступ ограничен') ||
     lower.includes('access denied') ||
     lower.includes('just a moment') ||
@@ -80,7 +91,7 @@ function isInvalidTitle(t?: string | null): boolean {
 }
 
 /**
- * Free Wildberries catalog API parser
+ * Free Wildberries catalog CDN parser
  */
 async function parseWildberries(url: string): Promise<LinkParseResult | null> {
   const match = url.match(/(?:wildberries\.ru|wb\.ru)\/catalog\/(\d+)/i);
@@ -89,53 +100,70 @@ async function parseWildberries(url: string): Promise<LinkParseResult | null> {
   const nmId = parseInt(match[1], 10);
   if (isNaN(nmId)) return null;
 
-  const endpoints = [
-    `https://card.wb.ru/cards/v2/detail?appType=1&curr=rub&dest=-1257786&spp=30&nm=${nmId}`,
-    `https://card.wb.ru/cards/v1/detail?appType=1&curr=rub&dest=-1257786&spp=30&nm=${nmId}`,
-  ];
+  const vol = Math.floor(nmId / 100000);
+  const part = Math.floor(nmId / 1000);
+  const baseBasket = parseInt(getWildberriesBasket(vol), 10);
 
-  for (const apiUrl of endpoints) {
+  // Probe baseBasket and adjacent to guarantee hit
+  const candidateBaskets = [
+    baseBasket,
+    baseBasket + 1,
+    baseBasket - 1,
+    baseBasket + 2,
+    baseBasket - 2,
+  ].filter((b) => b >= 1 && b <= 35);
+
+  for (const b of candidateBaskets) {
+    const basketStr = b < 10 ? `0${b}` : `${b}`;
+    const cardUrl = `https://basket-${basketStr}.wbbasket.ru/vol${vol}/part${part}/${nmId}/info/ru/card.json`;
+
     try {
-      const response = await fetch(apiUrl, {
+      const res = await fetch(cardUrl, {
         headers: {
-          'Accept': '*/*',
+          'Accept': 'application/json',
           'User-Agent':
-            'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
         },
         next: { revalidate: 3600 },
       });
 
-      if (!response.ok) continue;
+      if (!res.ok) continue;
 
-      const data = await response.json();
-      const product = data?.data?.products?.[0];
+      const product = await res.json();
+      const rawTitle = product.imt_name || product.subj_name || product.name;
+      if (!rawTitle || isInvalidTitle(rawTitle)) continue;
 
-      if (!product) continue;
+      const brand = product.selling?.brand_name || '';
+      const title = brand ? `${brand} / ${rawTitle}` : rawTitle;
+      const imageUrl = `https://basket-${basketStr}.wbbasket.ru/vol${vol}/part${part}/${nmId}/images/c516x688/1.webp`;
 
-      const vol = Math.floor(nmId / 100000);
-      const part = Math.floor(nmId / 1000);
-      const basket = getWildberriesBasket(vol);
-      const imageUrl = `https://basket-${basket}.wbbasket.ru/vol${vol}/part${part}/${nmId}/images/c516x688/1.webp`;
+      // Fetch price from price history
+      let price: number | undefined;
+      try {
+        const priceRes = await fetch(
+          `https://basket-${basketStr}.wbbasket.ru/vol${vol}/part${part}/${nmId}/info/price-history.json`,
+          { next: { revalidate: 3600 } }
+        );
+        if (priceRes.ok) {
+          const history = await priceRes.json();
+          if (Array.isArray(history) && history.length > 0) {
+            const lastItem = history[history.length - 1];
+            const rub = lastItem?.price?.RUB;
+            if (rub) price = Math.round(rub / 100);
+          }
+        }
+      } catch {}
 
-      // Price in kopecks
-      const rawPrice = product.sizes?.[0]?.price?.total || product.salePriceU || product.priceU;
-      const price = rawPrice ? Math.round(rawPrice / 100) : undefined;
-
-      const brandName = product.brand ? `${product.brand} / ` : '';
-      const title = `${brandName}${product.name || 'Товар с Wildberries'}`.trim();
-
-      if (title) {
-        return {
-          title,
-          price,
-          currency: '₽',
-          imageUrl,
-          source: 'wildberries',
-          success: true,
-        };
-      }
+      return {
+        title: title.trim(),
+        price,
+        currency: '₽',
+        imageUrl,
+        source: 'wildberries',
+        success: true,
+      };
     } catch {
-      // Try next endpoint
+      // Continue to next candidate basket
     }
   }
 
@@ -193,7 +221,6 @@ async function parseOzon(url: string): Promise<LinkParseResult> {
         $('meta[property="og:image"]').attr('content') ||
         $('meta[name="twitter:image"]').attr('content');
 
-      // Exclude favicon or brand icons
       if (imageUrl && (imageUrl.includes('favicon') || imageUrl.includes('logo'))) {
         imageUrl = undefined;
       }
@@ -207,9 +234,9 @@ async function parseOzon(url: string): Promise<LinkParseResult> {
 
       const finalTitle = title || slugTitle;
 
-      if (finalTitle) {
+      if (finalTitle && !isInvalidTitle(finalTitle)) {
         return {
-          title: finalTitle,
+          title: finalTitle.trim(),
           imageUrl: imageUrl || undefined,
           price,
           currency: '₽',
@@ -223,9 +250,9 @@ async function parseOzon(url: string): Promise<LinkParseResult> {
   }
 
   // Fallback to slug if scraping was blocked
-  if (slugTitle && slugTitle.length > 2) {
+  if (slugTitle && slugTitle.length > 2 && !isInvalidTitle(slugTitle)) {
     return {
-      title: slugTitle,
+      title: slugTitle.trim(),
       currency: '₽',
       source: 'ozon',
       success: true,
@@ -314,7 +341,7 @@ async function parseGeneric(url: string): Promise<LinkParseResult> {
       });
     }
 
-    const hasValidTitle = Boolean(title && title.trim().length > 1);
+    const hasValidTitle = Boolean(title && title.trim().length > 1 && !isInvalidTitle(title));
 
     return {
       title: hasValidTitle ? title.trim() : undefined,
