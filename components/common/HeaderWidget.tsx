@@ -1,11 +1,10 @@
 'use client';
 
-import React from 'react';
 import { Heart, Sparkles, UserCheck, Smartphone } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAppStore } from '@/lib/store/app-store';
 import { getAvatarUrl } from '@/lib/avatars';
-import { haptic } from '@/lib/telegram';
+import { haptic, isTelegramWebApp, isStandalonePwa } from '@/lib/telegram';
 
 interface HeaderWidgetProps {
   onOpenPwa?: () => void;
@@ -13,6 +12,10 @@ interface HeaderWidgetProps {
 
 export const HeaderWidget: React.FC<HeaderWidgetProps> = ({ onOpenPwa }) => {
   const { couple, currentUser, partnerUser, switchUser } = useAppStore();
+
+  const isTg = isTelegramWebApp();
+  const isPwa = isStandalonePwa();
+  const showPwaButton = onOpenPwa && isTg && !isPwa;
 
   const start = new Date(couple.startDate);
   const now = new Date();
@@ -75,7 +78,7 @@ export const HeaderWidget: React.FC<HeaderWidgetProps> = ({ onOpenPwa }) => {
 
         {/* Right side: PWA Button + Profile Pill */}
         <div className="flex items-center gap-1.5">
-          {onOpenPwa && (
+          {showPwaButton && (
             <button
               onClick={() => {
                 haptic.light();

@@ -303,14 +303,14 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         startParam = window.Telegram.WebApp.initDataUnsafe.start_param || '';
       }
 
-      if (urlAuthId && urlAuthCouple) {
+      if (urlAuthId) {
         // Authenticated via PWA Link!
         activeId = urlAuthId;
-        activeCode = urlAuthCouple;
+        const pwaCoupleId = (urlAuthCouple && urlAuthCouple.startsWith('CP-')) ? urlAuthCouple : null;
+
         setCurrentUserId(activeId);
         setIsAuthenticated(true);
         localStorage.setItem(STORAGE_KEYS.CURRENT_USER, activeId);
-        localStorage.setItem(STORAGE_KEYS.COUPLE_ID, activeCode);
 
         // Clean query parameters from URL without reloading
         window.history.replaceState({}, '', window.location.pathname);
@@ -318,15 +318,31 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         if (supabase) {
           (async () => {
             try {
-              if (urlAuthName) {
-                await supabase.from('profiles').upsert({
-                  id: activeId,
-                  name: urlAuthName,
-                  avatar: urlAuthAvatar || 'memoji_1',
-                  couple_id: activeCode,
+              // Fetch profile from Supabase to resolve real couple
+              const { data: existingProf } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', activeId)
+                .maybeSingle();
+
+              let resolvedCoupleId = existingProf?.couple_id;
+              if (!resolvedCoupleId || !resolvedCoupleId.startsWith('CP-')) {
+                resolvedCoupleId = pwaCoupleId || generateCoupleCode();
+                await supabase.from('couples').upsert({
+                  id: resolvedCoupleId,
+                  name: 'Наша семья',
                 }, { onConflict: 'id' });
               }
-              await loadCoupleData(activeCode, activeId);
+
+              await supabase.from('profiles').upsert({
+                id: activeId,
+                name: urlAuthName || existingProf?.name || 'Пользователь',
+                avatar: urlAuthAvatar || existingProf?.avatar || 'memoji_1',
+                couple_id: resolvedCoupleId,
+              }, { onConflict: 'id' });
+
+              localStorage.setItem(STORAGE_KEYS.COUPLE_ID, resolvedCoupleId);
+              await loadCoupleData(resolvedCoupleId, activeId);
             } catch (err) {
               console.warn('PWA url auth sync error:', err);
             }
@@ -390,11 +406,33 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
             }
           })();
         }
-      } else if (savedUser && savedCode && savedUser !== 'user_alex' && savedCode.startsWith('CP-')) {
+      } else if (savedUser && savedUser !== 'user_alex') {
         // Logged in previously in browser/PWA
         setCurrentUserId(savedUser);
         setIsAuthenticated(true);
-        if (supabase) loadCoupleData(savedCode, savedUser);
+        if (supabase) {
+          (async () => {
+            try {
+              const { data: existingProf } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', savedUser)
+                .maybeSingle();
+
+              let cId = existingProf?.couple_id || savedCode;
+              if (!cId || !cId.startsWith('CP-')) {
+                cId = generateCoupleCode();
+                await supabase.from('couples').upsert({ id: cId, name: 'Наша семья' }, { onConflict: 'id' });
+                await supabase.from('profiles').update({ couple_id: cId }).eq('id', savedUser);
+              }
+
+              localStorage.setItem(STORAGE_KEYS.COUPLE_ID, cId);
+              await loadCoupleData(cId, savedUser);
+            } catch (err) {
+              console.warn('Resume session error:', err);
+            }
+          })();
+        }
       } else {
         // Not authenticated yet in PWA
         setIsAuthenticated(false);

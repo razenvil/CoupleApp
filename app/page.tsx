@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAppStore } from '@/lib/store/app-store';
-import { initTelegramApp, haptic } from '@/lib/telegram';
+import { initTelegramApp, haptic, isTelegramWebApp, isStandalonePwa } from '@/lib/telegram';
 import { BottomNav, TabType } from '@/components/common/BottomNav';
 import { HeaderWidget } from '@/components/common/HeaderWidget';
 
@@ -594,29 +594,31 @@ export default function Home() {
                   <ChevronRight size={16} className="text-muted-foreground/60" />
                 </button>
 
-                {/* 📱 Установить PWA на телефон */}
-                <button
-                  onClick={() => {
-                    haptic.light();
-                    setIsPwaOpen(true);
-                  }}
-                  className="w-full p-3.5 flex items-center justify-between hover:bg-secondary/40 transition-colors text-left ios-press"
-                >
-                  <div className="flex items-center space-x-3">
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
-                      <Smartphone size={18} />
+                {/* 📱 Установить PWA на телефон (только в Telegram) */}
+                {isTelegramWebApp() && !isStandalonePwa() && (
+                  <button
+                    onClick={() => {
+                      haptic.light();
+                      setIsPwaOpen(true);
+                    }}
+                    className="w-full p-3.5 flex items-center justify-between hover:bg-secondary/40 transition-colors text-left ios-press"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                        <Smartphone size={18} />
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-foreground block">
+                          Установить PWA на телефон
+                        </span>
+                        <span className="text-[11px] text-muted-foreground font-medium block">
+                          Вход в приложение вне Telegram с экрана Домой
+                        </span>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-xs font-bold text-foreground block">
-                        Установить PWA на телефон
-                      </span>
-                      <span className="text-[11px] text-muted-foreground font-medium block">
-                        Вход в приложение вне Telegram с экрана Домой
-                      </span>
-                    </div>
-                  </div>
-                  <ChevronRight size={16} className="text-muted-foreground/60" />
-                </button>
+                    <ChevronRight size={16} className="text-muted-foreground/60" />
+                  </button>
+                )}
 
                 {/* ⚙️ Настройки оформления */}
                 <button

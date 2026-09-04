@@ -48,7 +48,15 @@ declare global {
 
 export function isTelegramWebApp(): boolean {
   if (typeof window === 'undefined') return false;
-  return Boolean(window.Telegram?.WebApp?.initData);
+  return Boolean(window.Telegram?.WebApp?.initData || window.Telegram?.WebApp?.initDataUnsafe?.user?.id);
+}
+
+export function isStandalonePwa(): boolean {
+  if (typeof window === 'undefined') return false;
+  return Boolean(
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (window.navigator as any)?.standalone === true
+  );
 }
 
 export function initTelegramApp() {
