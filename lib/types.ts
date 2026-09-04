@@ -101,6 +101,7 @@ export interface UserSizes {
   ringSize?: string;
   underwear?: string;
   heightCm?: string;
+  wristCm?: string;
   notes?: string;
 }
 
