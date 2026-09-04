@@ -8,20 +8,24 @@ const APP_URL = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { action, senderName, itemTitle, recipientChatId, senderChatId } = body;
+    const { action, senderName, itemTitle, recipientChatId, senderChatId, coupleId } = body;
 
     let targetChatId = recipientChatId;
 
     // 1. Try resolving partner from Supabase profiles if possible
     if (!targetChatId && supabase && senderChatId) {
       try {
-        const { data: partnerProfile } = await supabase
+        let query = supabase
           .from('profiles')
           .select('telegram_id')
           .neq('telegram_id', Number(senderChatId))
-          .not('telegram_id', 'is', null)
-          .limit(1)
-          .maybeSingle();
+          .not('telegram_id', 'is', null);
+
+        if (coupleId) {
+          query = query.eq('couple_id', coupleId);
+        }
+
+        const { data: partnerProfile } = await query.limit(1).maybeSingle();
 
         if (partnerProfile?.telegram_id) {
           targetChatId = partnerProfile.telegram_id;

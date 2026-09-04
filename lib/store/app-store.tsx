@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import {
   CoupleInfo,
   DocumentItem,
@@ -36,6 +36,8 @@ interface AppContextType {
   headerStyle: HeaderStyle;
   isDocumentsUnlocked: boolean;
   isDarkMode: boolean;
+  isLoaded: boolean;
+  isAuthenticated: boolean;
 
   // Actions
   switchUser: (userId: string) => void;
@@ -47,6 +49,12 @@ interface AppContextType {
   updateCoupleInfo: (data: Partial<CoupleInfo>) => void;
   updateUserProfile: (userId: string, data: Partial<UserProfile>) => void;
   updateUserSizes: (userId: string, data: Partial<UserSizes>) => void;
+
+  // Couple Code Pairing & Auth
+  joinCoupleByCode: (code: string) => Promise<{ success: boolean; message: string }>;
+  loginWithCoupleCode: (code: string, myName: string, avatar?: string) => Promise<{ success: boolean; message?: string }>;
+  loginAsNewCouple: (myName: string, avatar?: string) => Promise<{ success: boolean; message?: string }>;
+  logout: () => void;
 
   // Loyalty Cards
   addLoyaltyCard: (card: Omit<LoyaltyCard, 'id' | 'createdAt' | 'coupleId'>) => void;
@@ -75,6 +83,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const STORAGE_KEYS = {
   CURRENT_USER: 'couple_app_current_user',
+  COUPLE_ID: 'couple_app_active_couple_id',
   THEME: 'couple_app_theme',
   HEADER_STYLE: 'couple_app_header_style',
   DARK_MODE: 'couple_app_dark_mode',
@@ -86,7 +95,9 @@ const STORAGE_KEYS = {
   LOYALTY_CARDS: 'couple_app_loyalty_cards',
 };
 
-const DEFAULT_COUPLE_ID = 'default_couple';
+function generateCoupleCode(): string {
+  return `CP-${Math.floor(1000 + Math.random() * 9000)}`;
+}
 
 export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const [currentUserId, setCurrentUserId] = useState<string>('user_alex');
@@ -101,12 +112,157 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const [isDocumentsUnlocked, setIsDocumentsUnlocked] = useState<boolean>(false);
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
 
-  // Load saved state from LocalStorage on mount
+  // Fetch data belonging specifically to the active couple
+  const loadCoupleData = useCallback(async (coupleId: string, currentId: string) => {
+    if (!supabase || !coupleId) return;
+
+    try {
+      // 1. Fetch pair profiles
+      const { data: pairProfiles } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('couple_id', coupleId);
+
+      if (pairProfiles && pairProfiles.length > 0) {
+        const me = pairProfiles.find((p: any) => p.id === currentId) || pairProfiles[0];
+        const partner = pairProfiles.find((p: any) => p.id !== currentId);
+
+        setCouple((prev) => ({
+          ...prev,
+          id: coupleId,
+          inviteCode: coupleId,
+          partnerA: {
+            id: me.id,
+            name: me.name,
+            avatar: me.avatar || 'memoji_1',
+            role: 'partner_a',
+          },
+          partnerB: partner
+            ? {
+                id: partner.id,
+                name: partner.name,
+                avatar: partner.avatar || 'memoji_2',
+                role: 'partner_b',
+              }
+            : {
+                id: 'waiting',
+                name: 'Ожидаем половинку...',
+                avatar: 'memoji_2',
+                role: 'partner_b',
+              },
+        }));
+      }
+
+      // 2. Fetch tasks for this couple
+      const { data: tasksData } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('couple_id', coupleId)
+        .order('created_at', { ascending: false });
+
+      if (tasksData) {
+        const mappedTasks: TaskItem[] = tasksData.map((row: any) => ({
+          id: row.id,
+          coupleId,
+          title: row.title,
+          description: row.description || undefined,
+          assignee: row.assigned_to || 'both',
+          dueDate: row.due_date,
+          isCompleted: Boolean(row.is_completed),
+          isMegaTask: Array.isArray(row.subtasks) && row.subtasks.length > 0,
+          subtasks: Array.isArray(row.subtasks) ? row.subtasks : [],
+          creatorId: row.created_by,
+          createdAt: row.created_at,
+        }));
+        setTasks(mappedTasks);
+      }
+
+      // 3. Fetch wishlist for this couple
+      const { data: wishData } = await supabase
+        .from('wishlist_items')
+        .select('*')
+        .eq('couple_id', coupleId)
+        .order('created_at', { ascending: false });
+
+      if (wishData) {
+        const mappedWishlist: WishlistItem[] = wishData.map((row: any) => ({
+          id: row.id,
+          coupleId,
+          authorId: row.author_id || currentId,
+          authorName: row.created_by || 'Партнер',
+          title: row.title,
+          price: row.price ? Number(row.price) : undefined,
+          currency: row.currency || '₽',
+          link: row.url || undefined,
+          imageUrl: row.image_url || undefined,
+          priority: row.priority || 'medium',
+          isReservedByPartner: false,
+          isGifted: Boolean(row.is_purchased),
+          notes: row.description || undefined,
+          createdAt: row.created_at,
+        }));
+        setWishlist(mappedWishlist);
+      }
+
+      // 4. Fetch documents
+      const { data: docsData } = await supabase
+        .from('documents')
+        .select('*')
+        .eq('couple_id', coupleId);
+
+      if (docsData && docsData.length > 0) {
+        const mappedDocs: DocumentItem[] = docsData.map((d: any) => ({
+          id: d.id,
+          coupleId,
+          title: d.title,
+          category: d.category || 'other',
+          ownerId: currentId,
+          ownerName: 'Я',
+          fields: [{ label: 'Номер', value: d.notes || 'Защищено', copyable: true }],
+          fileUrl: d.file_url,
+          createdAt: d.created_at,
+          updatedAt: d.created_at,
+        }));
+        setDocuments(mappedDocs);
+      }
+
+      // 5. Fetch loyalty cards
+      const { data: cardsData } = await supabase
+        .from('loyalty_cards')
+        .select('*')
+        .eq('couple_id', coupleId);
+
+      if (cardsData && cardsData.length > 0) {
+        const mappedCards: LoyaltyCard[] = cardsData.map((c: any) => ({
+          id: c.id,
+          coupleId,
+          storeName: c.store_name,
+          cardNumber: c.barcode,
+          barcodeType: 'code128',
+          cardColor: c.color || 'from-blue-600 to-indigo-700',
+          addedById: currentId,
+          createdAt: c.created_at,
+        }));
+        setLoyaltyCards(mappedCards);
+      }
+    } catch (e) {
+      console.warn('loadCoupleData error:', e);
+    }
+  }, []);
+
+  // Initialize and check user profile / couple
   useEffect(() => {
+    let activeId = 'user_alex';
+    let activeCode = '';
+
     try {
       const savedUser = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
-      if (savedUser) setCurrentUserId(savedUser);
+      if (savedUser) activeId = savedUser;
+
+      const savedCode = localStorage.getItem(STORAGE_KEYS.COUPLE_ID);
+      if (savedCode) activeCode = savedCode;
 
       const savedTheme = localStorage.getItem(STORAGE_KEYS.THEME) as ThemeId | null;
       if (savedTheme) setThemeState(savedTheme);
@@ -121,157 +277,128 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         setIsDarkMode(true);
       }
 
-      const savedCouple = localStorage.getItem(STORAGE_KEYS.COUPLE);
-      if (savedCouple) setCouple(JSON.parse(savedCouple));
+      // Check URL parameters for seamless PWA link authentication
+      let urlAuthId: string | null = null;
+      let urlAuthName: string | null = null;
+      let urlAuthCouple: string | null = null;
+      let urlAuthAvatar: string | null = null;
+      if (typeof window !== 'undefined') {
+        const searchParams = new URLSearchParams(window.location.search);
+        urlAuthId = searchParams.get('auth_id');
+        urlAuthName = searchParams.get('name');
+        urlAuthCouple = searchParams.get('couple');
+        urlAuthAvatar = searchParams.get('avatar');
+      }
 
-      const savedDocs = localStorage.getItem(STORAGE_KEYS.DOCUMENTS);
-      if (savedDocs) setDocuments(JSON.parse(savedDocs));
+      // Telegram User detection
+      let tgUser = null;
+      let startParam = '';
+      if (typeof window !== 'undefined' && window.Telegram?.WebApp?.initDataUnsafe) {
+        tgUser = window.Telegram.WebApp.initDataUnsafe.user;
+        startParam = window.Telegram.WebApp.initDataUnsafe.start_param || '';
+      }
 
-      const savedWish = localStorage.getItem(STORAGE_KEYS.WISHLIST);
-      if (savedWish) setWishlist(JSON.parse(savedWish));
+      if (urlAuthId && urlAuthCouple) {
+        // Authenticated via PWA Link!
+        activeId = urlAuthId;
+        activeCode = urlAuthCouple;
+        setCurrentUserId(activeId);
+        setIsAuthenticated(true);
+        localStorage.setItem(STORAGE_KEYS.CURRENT_USER, activeId);
+        localStorage.setItem(STORAGE_KEYS.COUPLE_ID, activeCode);
 
-      const savedTasks = localStorage.getItem(STORAGE_KEYS.TASKS);
-      if (savedTasks) setTasks(JSON.parse(savedTasks));
+        // Clean query parameters from URL without reloading
+        window.history.replaceState({}, '', window.location.pathname);
 
-      const savedSizes = localStorage.getItem(STORAGE_KEYS.SIZES);
-      if (savedSizes) setSizes(JSON.parse(savedSizes));
-
-      const savedCards = localStorage.getItem(STORAGE_KEYS.LOYALTY_CARDS);
-      if (savedCards) setLoyaltyCards(JSON.parse(savedCards));
-
-      // Auto-detect Telegram WebApp User
-      if (typeof window !== 'undefined' && window.Telegram?.WebApp?.initDataUnsafe?.user) {
-        const tgUser = window.Telegram.WebApp.initDataUnsafe.user;
-        const fullName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ');
-        const tgId = String(tgUser.id);
+        if (supabase) {
+          (async () => {
+            try {
+              if (urlAuthName) {
+                await supabase.from('profiles').upsert({
+                  id: activeId,
+                  name: urlAuthName,
+                  avatar: urlAuthAvatar || 'memoji_1',
+                  couple_id: activeCode,
+                }, { onConflict: 'id' });
+              }
+              await loadCoupleData(activeCode, activeId);
+            } catch (err) {
+              console.warn('PWA url auth sync error:', err);
+            }
+          })();
+        }
+      } else if (tgUser) {
+        activeId = String(tgUser.id);
+        const fullName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ') || 'Пользователь';
         const avatar = tgUser.photo_url || 'memoji_1';
 
-        setCurrentUserId(tgId);
-        setCouple((prev) => ({
-          ...prev,
-          partnerA: {
-            ...prev.partnerA,
-            id: tgId,
-            name: fullName || prev.partnerA.name,
-            avatar,
-          },
-        }));
+        setCurrentUserId(activeId);
+        setIsAuthenticated(true);
 
-        // Upsert user profile to Supabase
+        // Supabase Profile & Couple Resolution
         if (supabase) {
-          supabase
-            .from('profiles')
-            .upsert(
-              {
-                id: tgId,
+          (async () => {
+            try {
+              // 1. Check existing profile
+              const { data: existingProfile } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', activeId)
+                .maybeSingle();
+
+              let userCoupleId = existingProfile?.couple_id;
+
+              // If invited via deep link start_param (e.g. start=CP-1234)
+              if (startParam && startParam.startsWith('CP-') && startParam !== userCoupleId) {
+                userCoupleId = startParam;
+              }
+
+              // If user has no couple yet, generate their own unique code!
+              if (!userCoupleId) {
+                userCoupleId = activeCode || generateCoupleCode();
+                // Ensure couple exists in couples table
+                await supabase.from('couples').upsert({
+                  id: userCoupleId,
+                  name: 'Наша семья',
+                }, { onConflict: 'id' });
+              }
+
+              // Save profile
+              await supabase.from('profiles').upsert({
+                id: activeId,
                 telegram_id: tgUser.id,
-                name: fullName || 'Пользователь',
+                name: fullName,
                 username: tgUser.username || null,
                 avatar,
-                couple_id: DEFAULT_COUPLE_ID,
-              },
-              { onConflict: 'id' }
-            )
-            .then(({ error }) => {
-              if (error) console.warn('Supabase upsert profile error:', error);
-            });
+                couple_id: userCoupleId,
+                role: existingProfile?.role || 'partner_a',
+              }, { onConflict: 'id' });
+
+              localStorage.setItem(STORAGE_KEYS.COUPLE_ID, userCoupleId);
+              localStorage.setItem(STORAGE_KEYS.CURRENT_USER, activeId);
+
+              // Load data for this couple
+              loadCoupleData(userCoupleId, activeId);
+            } catch (err) {
+              console.warn('Profile init error:', err);
+            }
+          })();
         }
+      } else if (savedUser && savedCode && savedUser !== 'user_alex') {
+        // Logged in previously in browser/PWA
+        setCurrentUserId(savedUser);
+        setIsAuthenticated(true);
+        if (supabase) loadCoupleData(savedCode, savedUser);
+      } else {
+        // Not authenticated yet in PWA
+        setIsAuthenticated(false);
       }
     } catch (e) {
-      console.warn('LocalStorage init error:', e);
+      console.warn('Init error:', e);
     } finally {
       setIsLoaded(true);
     }
-  }, []);
-
-  // Fetch data from Supabase if configured
-  useEffect(() => {
-    if (!supabase) return;
-
-    // Fetch tasks
-    supabase
-      .from('tasks')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
-        if (!error && data && data.length > 0) {
-          const mappedTasks: TaskItem[] = data.map((row: any) => ({
-            id: row.id,
-            coupleId: row.couple_id || DEFAULT_COUPLE_ID,
-            title: row.title,
-            description: row.description || undefined,
-            assignee: row.assigned_to || 'both',
-            dueDate: row.due_date,
-            isCompleted: Boolean(row.is_completed),
-            isMegaTask: Array.isArray(row.subtasks) && row.subtasks.length > 0,
-            subtasks: Array.isArray(row.subtasks) ? row.subtasks : [],
-            creatorId: row.created_by,
-            createdAt: row.created_at,
-          }));
-          setTasks(mappedTasks);
-        }
-      });
-
-    // Fetch wishlist
-    supabase
-      .from('wishlist_items')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
-        if (!error && data && data.length > 0) {
-          const mappedWishlist: WishlistItem[] = data.map((row: any) => ({
-            id: row.id,
-            coupleId: row.couple_id || DEFAULT_COUPLE_ID,
-            authorId: row.created_by === currentUser.name ? currentUser.id : partnerUser.id,
-            authorName: row.created_by || 'Партнер',
-            title: row.title,
-            price: row.price ? Number(row.price) : undefined,
-            currency: row.currency || '₽',
-            link: row.url || undefined,
-            imageUrl: row.image_url || undefined,
-            priority: row.priority || 'medium',
-            isReservedByPartner: false,
-            isGifted: Boolean(row.is_purchased),
-            notes: row.description || undefined,
-            createdAt: row.created_at,
-          }));
-          setWishlist(mappedWishlist);
-        }
-      });
-
-    // Fetch profiles to sync partner details
-    supabase
-      .from('profiles')
-      .select('*')
-      .then(({ data, error }) => {
-        if (!error && data && data.length > 0) {
-          const userA = data.find((p: any) => p.id === currentUserId) || data[0];
-          const userB = data.find((p: any) => p.id !== currentUserId) || data[1];
-
-          if (userA || userB) {
-            setCouple((prev) => ({
-              ...prev,
-              partnerA: userA
-                ? {
-                    ...prev.partnerA,
-                    id: userA.id,
-                    name: userA.name,
-                    avatar: userA.avatar || prev.partnerA.avatar,
-                  }
-                : prev.partnerA,
-              partnerB: userB
-                ? {
-                    ...prev.partnerB,
-                    id: userB.id,
-                    name: userB.name,
-                    avatar: userB.avatar || prev.partnerB.avatar,
-                  }
-                : prev.partnerB,
-            }));
-          }
-        }
-      });
-  }, [currentUserId]);
+  }, [loadCoupleData]);
 
   // Sync theme and dark mode to document DOM
   useEffect(() => {
@@ -337,6 +464,176 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  // Join couple by code
+  const joinCoupleByCode = async (code: string) => {
+    const cleanCode = code.trim().toUpperCase();
+    if (!supabase) return { success: false, message: 'База данных недоступна' };
+
+    try {
+      // Find profiles in target couple
+      const { data: foundProfiles, error: fetchErr } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('couple_id', cleanCode);
+
+      if (fetchErr || !foundProfiles || foundProfiles.length === 0) {
+        return { success: false, message: 'Пара с таким кодом не найдена. Проверьте код.' };
+      }
+
+      if (foundProfiles.length >= 2) {
+        return { success: false, message: 'В этой паре уже состоят 2 человека.' };
+      }
+
+      // Update current user's profile to this couple_id
+      const { error: updateErr } = await supabase
+        .from('profiles')
+        .update({ couple_id: cleanCode, role: 'partner_b' })
+        .eq('id', currentUserId);
+
+      if (updateErr) {
+        return { success: false, message: updateErr.message };
+      }
+
+      // Update localStorage
+      localStorage.setItem(STORAGE_KEYS.COUPLE_ID, cleanCode);
+
+      // Notify partner
+      const partner = foundProfiles[0];
+      if (partner?.telegram_id) {
+        sendPartnerNotification({
+          senderName: currentUser.name,
+          recipientChatId: partner.telegram_id,
+          action: 'task_created',
+          itemTitle: `🎉 ${currentUser.name} присоединился(-лась) к вашей паре!`,
+        });
+      }
+
+      // Reload data for the new couple!
+      await loadCoupleData(cleanCode, currentUserId);
+
+      return { success: true, message: 'Успешно' };
+    } catch (e: any) {
+      return { success: false, message: e.message || 'Ошибка соединения' };
+    }
+  };
+
+  // Login with existing couple code (PWA / Browser)
+  const loginWithCoupleCode = async (code: string, myName: string, avatar: string = 'memoji_2') => {
+    const cleanCode = code.trim().toUpperCase();
+    if (!cleanCode) return { success: false, message: 'Введите код пары' };
+    if (!myName.trim()) return { success: false, message: 'Введите ваше имя' };
+    if (!supabase) return { success: false, message: 'База данных недоступна' };
+
+    try {
+      const { data: existingProfiles, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('couple_id', cleanCode);
+
+      if (error || !existingProfiles || existingProfiles.length === 0) {
+        return { success: false, message: 'Пара с таким кодом не найдена. Проверьте код.' };
+      }
+
+      if (existingProfiles.length >= 2) {
+        return { success: false, message: 'В этой паре уже зарегистрировано 2 партнера.' };
+      }
+
+      const myId = `user_${Date.now()}`;
+      const cleanName = myName.trim();
+
+      await supabase.from('profiles').insert({
+        id: myId,
+        couple_id: cleanCode,
+        name: cleanName,
+        avatar,
+        role: 'partner_b',
+      });
+
+      setCurrentUserId(myId);
+      localStorage.setItem(STORAGE_KEYS.CURRENT_USER, myId);
+      localStorage.setItem(STORAGE_KEYS.COUPLE_ID, cleanCode);
+      setIsAuthenticated(true);
+
+      // Notify partner
+      const partner = existingProfiles[0];
+      if (partner?.telegram_id) {
+        sendPartnerNotification({
+          coupleId: cleanCode,
+          senderName: cleanName,
+          recipientChatId: partner.telegram_id,
+          action: 'task_created',
+          itemTitle: `🎉 ${cleanName} подключился(-лась) к вашей паре!`,
+        });
+      }
+
+      await loadCoupleData(cleanCode, myId);
+      return { success: true };
+    } catch (e: any) {
+      return { success: false, message: e.message || 'Ошибка соединения' };
+    }
+  };
+
+  // Login as a brand new couple (PWA / Browser)
+  const loginAsNewCouple = async (myName: string, avatar: string = 'memoji_1') => {
+    const cleanName = myName.trim();
+    if (!cleanName) return { success: false, message: 'Введите ваше имя' };
+    const newCode = generateCoupleCode();
+    const myId = `user_${Date.now()}`;
+
+    if (supabase) {
+      try {
+        await supabase.from('couples').upsert(
+          {
+            id: newCode,
+            name: 'Наша семья',
+          },
+          { onConflict: 'id' }
+        );
+
+        await supabase.from('profiles').insert({
+          id: myId,
+          couple_id: newCode,
+          name: cleanName,
+          avatar,
+          role: 'partner_a',
+        });
+      } catch (err) {
+        console.warn('Supabase create couple error:', err);
+      }
+    }
+
+    setCurrentUserId(myId);
+    localStorage.setItem(STORAGE_KEYS.CURRENT_USER, myId);
+    localStorage.setItem(STORAGE_KEYS.COUPLE_ID, newCode);
+    setCouple((prev) => ({
+      ...prev,
+      id: newCode,
+      inviteCode: newCode,
+      partnerA: {
+        id: myId,
+        name: cleanName,
+        avatar,
+        role: 'partner_a',
+      },
+      partnerB: {
+        id: 'waiting',
+        name: 'Ожидаем половинку...',
+        avatar: 'memoji_2',
+        role: 'partner_b',
+      },
+    }));
+    setIsAuthenticated(true);
+    if (supabase) await loadCoupleData(newCode, myId);
+    return { success: true };
+  };
+
+  // Logout / Switch
+  const logout = () => {
+    localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
+    localStorage.removeItem(STORAGE_KEYS.COUPLE_ID);
+    setIsAuthenticated(false);
+  };
+
   // Documents
   const addDocument = (doc: Omit<DocumentItem, 'id' | 'createdAt' | 'updatedAt' | 'coupleId'>) => {
     const newDoc: DocumentItem = {
@@ -351,7 +648,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     if (supabase) {
       supabase.from('documents').insert({
         id: newDoc.id,
-        couple_id: DEFAULT_COUPLE_ID,
+        couple_id: couple.id,
         title: newDoc.title,
         category: newDoc.category,
         notes: newDoc.notes,
@@ -360,6 +657,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     }
 
     sendPartnerNotification({
+      coupleId: couple.id,
       senderName: currentUser.name,
       action: 'doc_added',
       itemTitle: newDoc.title,
@@ -389,7 +687,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     if (supabase) {
       supabase.from('wishlist_items').insert({
         id: newItem.id,
-        couple_id: DEFAULT_COUPLE_ID,
+        couple_id: couple.id,
         title: newItem.title,
         description: newItem.notes,
         price: newItem.price,
@@ -403,6 +701,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     }
 
     sendPartnerNotification({
+      coupleId: couple.id,
       senderName: currentUser.name,
       action: 'wish_added',
       itemTitle: newItem.title,
@@ -475,7 +774,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     if (supabase) {
       supabase.from('tasks').insert({
         id: newTask.id,
-        couple_id: DEFAULT_COUPLE_ID,
+        couple_id: couple.id,
         title: newTask.title,
         description: newTask.description,
         category: 'Общее',
@@ -484,12 +783,11 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         is_completed: false,
         subtasks: newTask.subtasks || [],
         created_by: currentUser.name,
-      }).then(({ error }) => {
-        if (error) console.warn('Supabase insert task error:', error);
-      });
+      }).then();
     }
 
     sendPartnerNotification({
+      coupleId: couple.id,
       senderName: currentUser.name,
       action: 'task_created',
       itemTitle: newTask.title,
@@ -515,13 +813,12 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         .from('tasks')
         .update(updatePayload)
         .eq('id', id)
-        .then(({ error }) => {
-          if (error) console.warn('Supabase update task error:', error);
-        });
+        .then();
     }
 
     if (data.title) {
       sendPartnerNotification({
+        coupleId: couple.id,
         senderName: currentUser.name,
         action: 'task_updated',
         itemTitle: data.title,
@@ -537,6 +834,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
 
           if (completed) {
             sendPartnerNotification({
+              coupleId: couple.id,
               senderName: currentUser.name,
               action: 'task_completed',
               itemTitle: t.title,
@@ -621,7 +919,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     if (supabase) {
       supabase.from('loyalty_cards').insert({
         id: newCard.id,
-        couple_id: DEFAULT_COUPLE_ID,
+        couple_id: couple.id,
         store_name: newCard.storeName,
         barcode: newCard.cardNumber,
         color: newCard.cardColor,
@@ -651,6 +949,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         headerStyle,
         isDocumentsUnlocked,
         isDarkMode,
+        isLoaded,
+        isAuthenticated,
         switchUser,
         setTheme,
         setHeaderStyle,
@@ -660,6 +960,10 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         updateCoupleInfo,
         updateUserProfile,
         updateUserSizes,
+        joinCoupleByCode,
+        loginWithCoupleCode,
+        loginAsNewCouple,
+        logout,
         addLoyaltyCard,
         deleteLoyaltyCard,
         addDocument,

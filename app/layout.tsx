@@ -6,6 +6,10 @@ export const metadata: Metadata = {
   title: 'Мы Вместе — Приложение для пар',
   description: 'Общий сейф документов, список желаний с автопарсингом и задачи для двоих в стиле Apple iOS',
   manifest: '/manifest.json',
+  icons: {
+    icon: '/icon.svg',
+    apple: '/icon.svg',
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',

@@ -44,7 +44,9 @@ import {
   Share2,
   Sliders,
   Heart,
+  Loader2,
 } from 'lucide-react';
+import { LoginScreen } from '@/components/auth/LoginScreen';
 
 export default function Home() {
   const {
@@ -56,6 +58,8 @@ export default function Home() {
     tasks,
     loyaltyCards,
     isDocumentsUnlocked,
+    isLoaded,
+    isAuthenticated,
     unlockDocuments,
     lockDocuments,
     toggleTask,
@@ -123,6 +127,20 @@ export default function Home() {
       d.fields.some((f) => f.value.toLowerCase().includes(query))
     );
   });
+
+  // Guard checks
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center space-y-3">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <span className="text-xs text-muted-foreground font-medium">Загрузка пространства...</span>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginScreen />;
+  }
 
   return (
     <div className="min-h-screen pb-32 pt-2">

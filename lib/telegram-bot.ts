@@ -3,6 +3,7 @@
  */
 
 export interface NotificationPayload {
+  coupleId?: string;
   recipientChatId?: number | string;
   senderChatId?: number | string;
   senderName: string;

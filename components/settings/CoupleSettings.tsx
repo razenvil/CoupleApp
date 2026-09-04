@@ -2,14 +2,22 @@
 
 import React, { useState } from 'react';
 import { useAppStore } from '@/lib/store/app-store';
-import { Heart, Share2, Copy, Check, Lock, Calendar, Users } from 'lucide-react';
+import { Heart, Share2, Copy, Check, Lock, Calendar, Users, Smartphone } from 'lucide-react';
 import { haptic } from '@/lib/telegram';
 
 export const CoupleSettings: React.FC = () => {
-  const { couple, updateCoupleInfo, updateUserProfile, lockDocuments, isDocumentsUnlocked } =
-    useAppStore();
+  const {
+    couple,
+    currentUser,
+    updateCoupleInfo,
+    updateUserProfile,
+    lockDocuments,
+    isDocumentsUnlocked,
+    logout,
+  } = useAppStore();
 
   const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedPwa, setCopiedPwa] = useState(false);
   const [partnerAName, setPartnerAName] = useState(couple.partnerA.name);
   const [partnerBName, setPartnerBName] = useState(couple.partnerB.name);
   const [startDate, setStartDate] = useState(couple.startDate.split('T')[0]);
@@ -21,6 +29,19 @@ export const CoupleSettings: React.FC = () => {
     setCopiedLink(true);
     haptic.success();
     setTimeout(() => setCopiedLink(false), 2000);
+  };
+
+  const handleCopyPwaLink = () => {
+    if (typeof window === 'undefined') return;
+    const origin = window.location.origin;
+    const pwaUrl = `${origin}/?auth_id=${encodeURIComponent(currentUser.id)}&name=${encodeURIComponent(
+      currentUser.name
+    )}&couple=${encodeURIComponent(couple.id)}&avatar=${encodeURIComponent(currentUser.avatar)}`;
+
+    navigator.clipboard.writeText(pwaUrl);
+    setCopiedPwa(true);
+    haptic.success();
+    setTimeout(() => setCopiedPwa(false), 2500);
   };
 
   const handleSaveNames = () => {
@@ -50,7 +71,7 @@ export const CoupleSettings: React.FC = () => {
           <h4 className="text-sm font-bold tracking-tight">Пригласить партнера</h4>
         </div>
         <p className="text-xs text-muted-foreground mb-3">
-          Отправьте ссылку своей второй половинке, чтобы подключиться к общему пространству в Telegram.
+          Отправьте код <b>{couple.inviteCode}</b> или ссылку своей второй половинке, чтобы подключиться к общему пространству.
         </p>
 
         <div className="flex items-center space-x-2">
@@ -72,6 +93,25 @@ export const CoupleSettings: React.FC = () => {
             <span>{copiedLink ? 'Скопировано!' : 'Копировать'}</span>
           </button>
         </div>
+      </div>
+
+      {/* PWA Home Screen Sync */}
+      <div className="bg-card text-card-foreground rounded-ios-card p-4 border border-border shadow-ios space-y-2.5">
+        <div className="flex items-center space-x-2">
+          <Smartphone size={18} className="text-primary" />
+          <h4 className="text-sm font-bold tracking-tight">Установить PWA на экран «Домой»</h4>
+        </div>
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          Чтобы пользоваться приложением на iPhone/Android вне Telegram: скопируйте персональную ссылку, откройте в Safari/Chrome и нажмите «На экран Домой».
+        </p>
+        <button
+          type="button"
+          onClick={handleCopyPwaLink}
+          className="w-full py-2.5 px-3 rounded-[12px] bg-secondary hover:bg-secondary/80 text-foreground font-semibold text-xs border border-border flex items-center justify-center space-x-2 ios-press"
+        >
+          {copiedPwa ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+          <span>{copiedPwa ? 'Ссылка скопирована!' : 'Скопировать персональную ссылку для PWA'}</span>
+        </button>
       </div>
 
       {/* Couple Profiles */}
@@ -145,6 +185,21 @@ export const CoupleSettings: React.FC = () => {
             Заблокировать сейчас
           </button>
         )}
+      </div>
+
+      {/* Account logout */}
+      <div className="pt-2">
+        <button
+          type="button"
+          onClick={() => {
+            if (confirm('Вы действительно хотите выйти из аккаунта?')) {
+              logout();
+            }
+          }}
+          className="w-full py-2.5 rounded-[12px] text-destructive hover:bg-destructive/10 text-xs font-semibold border border-destructive/20 ios-press transition-colors text-center"
+        >
+          Выйти из аккаунта
+        </button>
       </div>
     </div>
   );
