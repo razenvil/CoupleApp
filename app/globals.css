@@ -1,0 +1,144 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================================================
+   Apple iOS 26 Design System (Spatial & Liquid Glass HIG)
+   ========================================================================== */
+
+:root {
+  /* iOS 26 System Colors - Rose Gold / Romantic */
+  --background: #F2F2F7;
+  --foreground: #000000;
+  --card: #FFFFFF;
+  --card-foreground: #000000;
+  --secondary: #E5E5EA;
+  --secondary-foreground: #1C1C1E;
+  --muted: #8E8E93;
+  --muted-foreground: #636366;
+  --primary: #FF2D55; /* Apple System Pink / Rose */
+  --primary-foreground: #FFFFFF;
+  --primary-hover: #E0264A;
+  --primary-light: #FFEBF0;
+  --accent: #5856D6;
+  --border: rgba(60, 60, 67, 0.12);
+  --separator: rgba(60, 60, 67, 0.2);
+
+  /* iOS Specular Glass */
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-rim: rgba(255, 255, 255, 0.85);
+  --glass-shadow: 0 12px 36px -4px rgba(0, 0, 0, 0.08), 0 4px 12px -2px rgba(0, 0, 0, 0.04);
+}
+
+/* OLED Pure Black Mode */
+.dark {
+  --background: #000000;
+  --foreground: #FFFFFF;
+  --card: #1C1C1E;
+  --card-foreground: #FFFFFF;
+  --secondary: #2C2C2E;
+  --secondary-foreground: #E5E5EA;
+  --muted: #8E8E93;
+  --muted-foreground: #AEAEB2;
+  --primary: #FF375F; /* iOS Dark System Pink */
+  --primary-foreground: #FFFFFF;
+  --primary-hover: #FF5476;
+  --primary-light: rgba(255, 55, 95, 0.18);
+  --accent: #5E5CE6;
+  --border: rgba(255, 255, 255, 0.1);
+  --separator: rgba(84, 84, 88, 0.45);
+
+  /* iOS Specular Dark Glass */
+  --glass-bg: rgba(28, 28, 30, 0.78);
+  --glass-rim: rgba(255, 255, 255, 0.18);
+  --glass-shadow: 0 16px 40px -8px rgba(0, 0, 0, 0.6), 0 6px 16px -4px rgba(0, 0, 0, 0.4);
+}
+
+/* Theme 2: Apple Classic Monochrome & System Blue */
+[data-theme="apple-classic"] {
+  --primary: #007AFF;
+  --primary-hover: #0066D6;
+  --primary-light: #EBF4FF;
+}
+.dark[data-theme="apple-classic"] {
+  --primary: #0A84FF;
+  --primary-hover: #3399FF;
+  --primary-light: rgba(10, 132, 255, 0.2);
+}
+
+/* Theme 3: Cozy Pastel Lavender */
+[data-theme="cozy-pastel"] {
+  --primary: #AF52DE;
+  --primary-hover: #9838C7;
+  --primary-light: #F7EEFC;
+}
+.dark[data-theme="cozy-pastel"] {
+  --primary: #BF5AF2;
+  --primary-hover: #CC77F5;
+  --primary-light: rgba(191, 90, 242, 0.2);
+}
+
+/* Apple Typography & Foundations */
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  overscroll-behavior-y: none;
+}
+
+/* Apple Floating Island Glass (Liquid Glass) */
+.ios-floating-glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(32px) saturate(200%);
+  -webkit-backdrop-filter: blur(32px) saturate(200%);
+  border-top: 0.5px solid var(--glass-rim);
+  border-bottom: 0.5px solid rgba(0, 0, 0, 0.1);
+  box-shadow: var(--glass-shadow);
+}
+
+/* Dynamic Island Capsule */
+.ios-dynamic-island {
+  background: #000000;
+  color: #FFFFFF;
+  border-radius: 9999px;
+  box-shadow: 0 8px 24px -2px rgba(0, 0, 0, 0.35);
+  border: 0.5px solid rgba(255, 255, 255, 0.15);
+}
+
+/* Apple Inset Grouped Card */
+.ios-card {
+  background: var(--card);
+  color: var(--card-foreground);
+  border-radius: 24px;
+  box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.04);
+}
+.dark .ios-card {
+  box-shadow: 0 6px 24px -4px rgba(0, 0, 0, 0.4);
+}
+
+/* Apple Button Spring Scaling */
+.ios-press {
+  transition: transform 0.12s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.12s ease;
+}
+.ios-press:active {
+  transform: scale(0.96);
+  opacity: 0.88;
+}
+
+/* Safe areas for iPhone Home Bar & Dynamic Island */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 28px);
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 16px);
+}
+
+/* Invisible scrollbar */
+::-webkit-scrollbar {
+  display: none;
+}

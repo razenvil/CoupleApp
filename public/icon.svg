@@ -1,0 +1,13 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" rx="120" fill="url(#bg_gradient)" />
+  <defs>
+    <linearGradient id="bg_gradient" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF758C" />
+      <stop offset="1" stop-color="#FF7EB3" />
+    </linearGradient>
+    <filter id="shadow" x="100" y="100" width="312" height="312" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#7C0A28" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+  <path d="M256 390L233.74 369.74C154.66 298.02 102.4 250.62 102.4 192.12C102.4 144.72 139.52 107.6 186.92 107.6C213.68 107.6 239.36 120.08 256 139.6C272.64 120.08 298.32 107.6 325.08 107.6C372.48 107.6 409.6 144.72 409.6 192.12C409.6 250.62 357.34 298.02 278.26 369.96L256 390Z" fill="white" filter="url(#shadow)"/>
+</svg>

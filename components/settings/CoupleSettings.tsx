@@ -1,0 +1,151 @@
+'use client';
+
+import React, { useState } from 'react';
+import { useAppStore } from '@/lib/store/app-store';
+import { Heart, Share2, Copy, Check, Lock, Calendar, Users } from 'lucide-react';
+import { haptic } from '@/lib/telegram';
+
+export const CoupleSettings: React.FC = () => {
+  const { couple, updateCoupleInfo, updateUserProfile, lockDocuments, isDocumentsUnlocked } =
+    useAppStore();
+
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [partnerAName, setPartnerAName] = useState(couple.partnerA.name);
+  const [partnerBName, setPartnerBName] = useState(couple.partnerB.name);
+  const [startDate, setStartDate] = useState(couple.startDate.split('T')[0]);
+
+  const inviteLink = `https://t.me/our_couple_bot?start=${couple.inviteCode}`;
+
+  const handleCopyInvite = () => {
+    navigator.clipboard.writeText(inviteLink);
+    setCopiedLink(true);
+    haptic.success();
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
+
+  const handleSaveNames = () => {
+    updateUserProfile(couple.partnerA.id, { name: partnerAName });
+    updateUserProfile(couple.partnerB.id, { name: partnerBName });
+    haptic.success();
+  };
+
+  const handleDateChange = (val: string) => {
+    setStartDate(val);
+    updateCoupleInfo({ startDate: new Date(val).toISOString() });
+    haptic.light();
+  };
+
+  const handleLockVault = () => {
+    lockDocuments();
+    haptic.heavy();
+    alert('Сейф документов успешно заблокирован!');
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Invite Partner Card */}
+      <div className="bg-gradient-to-br from-primary/15 via-card to-card text-card-foreground rounded-ios-card p-4 border border-primary/20 shadow-ios">
+        <div className="flex items-center space-x-2 mb-1.5">
+          <Share2 size={18} className="text-primary" />
+          <h4 className="text-sm font-bold tracking-tight">Пригласить партнера</h4>
+        </div>
+        <p className="text-xs text-muted-foreground mb-3">
+          Отправьте ссылку своей второй половинке, чтобы подключиться к общему пространству в Telegram.
+        </p>
+
+        <div className="flex items-center space-x-2">
+          <input
+            type="text"
+            readOnly
+            value={inviteLink}
+            className="flex-1 px-3 py-2 rounded-[12px] bg-secondary border border-border text-xs text-foreground font-mono select-all focus:outline-none"
+          />
+          <button
+            onClick={handleCopyInvite}
+            className={`px-3.5 py-2 rounded-[12px] text-xs font-semibold flex items-center space-x-1 transition-all ios-tap-scale shadow-sm ${
+              copiedLink
+                ? 'bg-emerald-500 text-white'
+                : 'bg-primary text-primary-foreground hover:bg-primary-hover'
+            }`}
+          >
+            {copiedLink ? <Check size={14} /> : <Copy size={14} />}
+            <span>{copiedLink ? 'Скопировано!' : 'Копировать'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Couple Profiles */}
+      <div className="bg-card text-card-foreground rounded-ios-card p-4 border border-border shadow-ios space-y-3">
+        <div className="flex items-center space-x-2">
+          <Users size={18} className="text-primary" />
+          <h4 className="text-sm font-bold tracking-tight">Имена пары</h4>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="text-[11px] font-semibold text-muted-foreground block mb-1">
+              Партнер 1
+            </label>
+            <input
+              type="text"
+              value={partnerAName}
+              onChange={(e) => setPartnerAName(e.target.value)}
+              onBlur={handleSaveNames}
+              className="w-full px-3 py-2 rounded-[12px] bg-secondary border border-border text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+          <div>
+            <label className="text-[11px] font-semibold text-muted-foreground block mb-1">
+              Партнер 2
+            </label>
+            <input
+              type="text"
+              value={partnerBName}
+              onChange={(e) => setPartnerBName(e.target.value)}
+              onBlur={handleSaveNames}
+              className="w-full px-3 py-2 rounded-[12px] bg-secondary border border-border text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+        </div>
+
+        {/* Start Date of Dating */}
+        <div className="pt-2 border-t border-border/50">
+          <label className="text-[11px] font-semibold text-muted-foreground block mb-1 flex items-center gap-1">
+            <Calendar size={13} className="text-primary" />
+            <span>Дата начала отношений (для счетчика дней вместе):</span>
+          </label>
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => handleDateChange(e.target.value)}
+            className="w-full px-3 py-2 rounded-[12px] bg-secondary border border-border text-xs font-medium text-foreground focus:outline-none"
+          />
+        </div>
+      </div>
+
+      {/* Vault Security */}
+      <div className="bg-card text-card-foreground rounded-ios-card p-4 border border-border shadow-ios flex items-center justify-between">
+        <div className="flex items-center space-x-2.5">
+          <Lock size={18} className="text-primary" />
+          <div>
+            <span className="text-xs font-bold text-foreground block">
+              Безопасность сейфа
+            </span>
+            <span className="text-[11px] text-muted-foreground">
+              {isDocumentsUnlocked ? 'Сейф сейчас разблокирован' : 'Сейф защищен PIN-кодом'}
+            </span>
+          </div>
+        </div>
+
+        {isDocumentsUnlocked && (
+          <button
+            onClick={handleLockVault}
+            className="px-3 py-1.5 rounded-[10px] bg-secondary hover:bg-secondary/80 text-foreground text-xs font-medium border border-border ios-tap-scale"
+          >
+            Заблокировать сейчас
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};

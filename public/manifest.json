@@ -1,0 +1,17 @@
+{
+  "name": "Мы Вместе — Приложение для пар",
+  "short_name": "Мы Вместе",
+  "description": "Общий сейф документов, хотелки и задачи для пар в стиле Apple iOS",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#e06d75",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
