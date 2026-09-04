@@ -1,13 +1,17 @@
 'use client';
 
 import React from 'react';
-import { Heart, Sparkles, UserCheck } from 'lucide-react';
+import { Heart, Sparkles, UserCheck, Smartphone } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAppStore } from '@/lib/store/app-store';
 import { getAvatarUrl } from '@/lib/avatars';
 import { haptic } from '@/lib/telegram';
 
-export const HeaderWidget: React.FC = () => {
+interface HeaderWidgetProps {
+  onOpenPwa?: () => void;
+}
+
+export const HeaderWidget: React.FC<HeaderWidgetProps> = ({ onOpenPwa }) => {
   const { couple, currentUser, partnerUser, switchUser } = useAppStore();
 
   const start = new Date(couple.startDate);
@@ -69,17 +73,34 @@ export const HeaderWidget: React.FC = () => {
           </div>
         </motion.div>
 
-        {/* Current User Authenticated Profile Pill */}
-        <div
-          className="flex items-center space-x-2 pl-2.5 pr-1.5 py-1 rounded-full bg-secondary/70 border border-border/40 text-xs font-medium text-foreground shadow-xs select-none"
-        >
-          <span className="font-bold text-xs">{currentUser.name}</span>
-          <div className="w-6 h-6 rounded-full overflow-hidden ring-1 ring-primary/50 bg-secondary shrink-0">
-            <img
-              src={getAvatarUrl(currentUser.avatar)}
-              alt={currentUser.name}
-              className="w-full h-full object-cover"
-            />
+        {/* Right side: PWA Button + Profile Pill */}
+        <div className="flex items-center gap-1.5">
+          {onOpenPwa && (
+            <button
+              onClick={() => {
+                haptic.light();
+                onOpenPwa();
+              }}
+              className="px-2.5 py-1 rounded-full bg-primary/10 hover:bg-primary/20 text-primary border border-primary/25 text-[11px] font-bold flex items-center gap-1 ios-press transition-colors shadow-xs"
+              title="Установить PWA на экран Домой"
+            >
+              <Smartphone size={13} />
+              <span>PWA</span>
+            </button>
+          )}
+
+          {/* Current User Authenticated Profile Pill */}
+          <div
+            className="flex items-center space-x-2 pl-2.5 pr-1.5 py-1 rounded-full bg-secondary/70 border border-border/40 text-xs font-medium text-foreground shadow-xs select-none"
+          >
+            <span className="font-bold text-xs">{currentUser.name}</span>
+            <div className="w-6 h-6 rounded-full overflow-hidden ring-1 ring-primary/50 bg-secondary shrink-0">
+              <img
+                src={getAvatarUrl(currentUser.avatar)}
+                alt={currentUser.name}
+                className="w-full h-full object-cover"
+              />
+            </div>
           </div>
         </div>
       </div>

@@ -1,7 +1,7 @@
 import { CoupleInfo, DocumentItem, TaskItem, WishlistItem, UserSizes, LoyaltyCard } from '../types';
 
 export const INITIAL_COUPLE: CoupleInfo = {
-  id: 'couple_main',
+  id: '',
   partnerA: {
     id: 'user_1',
     name: 'Партнер 1',
@@ -16,7 +16,7 @@ export const INITIAL_COUPLE: CoupleInfo = {
   },
   startDate: new Date().toISOString(),
   anniversaryTitle: 'Наша дата',
-  inviteCode: 'LOVE-2024',
+  inviteCode: '',
 };
 
 // Clean production initial arrays — filled directly by the couple

@@ -116,7 +116,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
 
   // Fetch data belonging specifically to the active couple
   const loadCoupleData = useCallback(async (coupleId: string, currentId: string) => {
-    if (!supabase || !coupleId) return;
+    if (!supabase || !coupleId || coupleId === 'default_couple' || coupleId === 'couple_main') return;
 
     try {
       // 1. Fetch pair profiles
@@ -262,7 +262,12 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       if (savedUser) activeId = savedUser;
 
       const savedCode = localStorage.getItem(STORAGE_KEYS.COUPLE_ID);
-      if (savedCode) activeCode = savedCode;
+      if (savedCode && savedCode !== 'default_couple' && savedCode !== 'couple_main' && savedCode !== 'LOVE2024' && savedCode.startsWith('CP-')) {
+        activeCode = savedCode;
+      } else {
+        localStorage.removeItem(STORAGE_KEYS.COUPLE_ID);
+        activeCode = '';
+      }
 
       const savedTheme = localStorage.getItem(STORAGE_KEYS.THEME) as ThemeId | null;
       if (savedTheme) setThemeState(savedTheme);
@@ -348,14 +353,15 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
 
               let userCoupleId = existingProfile?.couple_id;
 
-              // If invited via deep link start_param (e.g. start=CP-1234)
-              if (startParam && startParam.startsWith('CP-') && startParam !== userCoupleId) {
-                userCoupleId = startParam;
-              }
+              const isInvalidCoupleId = (cid?: string | null) =>
+                !cid || cid === 'default_couple' || cid === 'couple_main' || cid === 'LOVE2024' || !cid.startsWith('CP-');
 
-              // If user has no couple yet, generate their own unique code!
-              if (!userCoupleId) {
-                userCoupleId = activeCode || generateCoupleCode();
+              // If invited via deep link start_param (e.g. start=CP-1234)
+              if (startParam && startParam.startsWith('CP-')) {
+                userCoupleId = startParam;
+              } else if (isInvalidCoupleId(userCoupleId)) {
+                // Discard old default_couple and generate fresh unique couple code!
+                userCoupleId = (activeCode && activeCode.startsWith('CP-')) ? activeCode : generateCoupleCode();
                 // Ensure couple exists in couples table
                 await supabase.from('couples').upsert({
                   id: userCoupleId,
@@ -384,7 +390,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
             }
           })();
         }
-      } else if (savedUser && savedCode && savedUser !== 'user_alex') {
+      } else if (savedUser && savedCode && savedUser !== 'user_alex' && savedCode.startsWith('CP-')) {
         // Logged in previously in browser/PWA
         setCurrentUserId(savedUser);
         setIsAuthenticated(true);

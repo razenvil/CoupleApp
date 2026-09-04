@@ -45,8 +45,10 @@ import {
   Sliders,
   Heart,
   Loader2,
+  Smartphone,
 } from 'lucide-react';
 import { LoginScreen } from '@/components/auth/LoginScreen';
+import { PwaModal } from '@/components/couple/PwaModal';
 
 export default function Home() {
   const {
@@ -87,6 +89,7 @@ export default function Home() {
   const [isWalletOpen, setIsWalletOpen] = useState(false);
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isPwaOpen, setIsPwaOpen] = useState(false);
 
   // Filters
   const [taskFilter, setTaskFilter] = useState<'all' | 'shopping' | 'me' | 'partner'>('all');
@@ -145,7 +148,7 @@ export default function Home() {
   return (
     <div className="min-h-screen pb-32 pt-2">
       {/* iOS 26 Dynamic Island & Live Activity Header */}
-      <HeaderWidget />
+      <HeaderWidget onOpenPwa={() => setIsPwaOpen(true)} />
 
       {/* Main Tab Content with Apple Large Titles */}
       <main className="max-w-md mx-auto px-5 mt-4">
@@ -591,6 +594,30 @@ export default function Home() {
                   <ChevronRight size={16} className="text-muted-foreground/60" />
                 </button>
 
+                {/* 📱 Установить PWA на телефон */}
+                <button
+                  onClick={() => {
+                    haptic.light();
+                    setIsPwaOpen(true);
+                  }}
+                  className="w-full p-3.5 flex items-center justify-between hover:bg-secondary/40 transition-colors text-left ios-press"
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                      <Smartphone size={18} />
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-foreground block">
+                        Установить PWA на телефон
+                      </span>
+                      <span className="text-[11px] text-muted-foreground font-medium block">
+                        Вход в приложение вне Telegram с экрана Домой
+                      </span>
+                    </div>
+                  </div>
+                  <ChevronRight size={16} className="text-muted-foreground/60" />
+                </button>
+
                 {/* ⚙️ Настройки оформления */}
                 <button
                   onClick={() => {
@@ -690,6 +717,11 @@ export default function Home() {
       <AppearanceSettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
+      />
+
+      <PwaModal
+        isOpen={isPwaOpen}
+        onClose={() => setIsPwaOpen(false)}
       />
     </div>
   );
