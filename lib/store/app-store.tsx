@@ -22,6 +22,11 @@ import {
 } from './mock-data';
 import { sendPartnerNotification } from '../telegram-bot';
 import { supabase } from '../supabase';
+import {
+  enqueueTaskMutation,
+  getPendingTaskMutations,
+  processTaskQueue,
+} from '../offline-sync';
 
 interface AppContextType {
   currentUser: UserProfile;
@@ -190,20 +195,34 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         .order('created_at', { ascending: false });
 
       if (tasksData) {
-        const mappedTasks: TaskItem[] = tasksData.map((row: any) => ({
-          id: row.id,
-          coupleId,
-          title: row.title,
-          description: row.description || undefined,
-          assignee: row.assigned_to || 'both',
-          dueDate: row.due_date,
-          isCompleted: Boolean(row.is_completed),
-          isMegaTask: Array.isArray(row.subtasks) && row.subtasks.length > 0,
-          subtasks: Array.isArray(row.subtasks) ? row.subtasks : [],
-          creatorId: row.created_by,
-          createdAt: row.created_at,
-        }));
-        setTasks(mappedTasks);
+        const pendingMutations = getPendingTaskMutations();
+        const pendingCreated = pendingMutations
+          .filter((m) => m.type === 'CREATE_TASK' && m.payload?.id)
+          .map((m) => m.payload as TaskItem);
+        const pendingDeletedIds = new Set(
+          pendingMutations.filter((m) => m.type === 'DELETE_TASK').map((m) => m.payload.id)
+        );
+
+        const mappedTasks: TaskItem[] = tasksData
+          .filter((row: any) => !pendingDeletedIds.has(row.id))
+          .map((row: any) => ({
+            id: row.id,
+            coupleId,
+            title: row.title,
+            description: row.description || undefined,
+            assignee: row.assigned_to || 'both',
+            dueDate: row.due_date,
+            isCompleted: Boolean(row.is_completed),
+            isMegaTask: Array.isArray(row.subtasks) && row.subtasks.length > 0,
+            subtasks: Array.isArray(row.subtasks) ? row.subtasks : [],
+            creatorId: row.created_by,
+            createdAt: row.created_at,
+          }));
+
+        // Merge: keep local tasks created offline that haven't landed in Supabase yet
+        const serverIds = new Set(mappedTasks.map((t) => t.id));
+        const unsyncedToKeep = pendingCreated.filter((t) => !serverIds.has(t.id));
+        setTasks([...unsyncedToKeep, ...mappedTasks]);
       }
 
       // 3. Fetch wishlist for this couple
@@ -307,6 +326,32 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         setIsDarkMode(savedDark === 'true');
       } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
         setIsDarkMode(true);
+      }
+
+      // Offline-First Hydration: restore cached data immediately so safe and tasks work with zero internet
+      const savedDocs = localStorage.getItem(STORAGE_KEYS.DOCUMENTS);
+      if (savedDocs) {
+        try { setDocuments(JSON.parse(savedDocs)); } catch (e) {}
+      }
+      const savedTasks = localStorage.getItem(STORAGE_KEYS.TASKS);
+      if (savedTasks) {
+        try { setTasks(JSON.parse(savedTasks)); } catch (e) {}
+      }
+      const savedWishlist = localStorage.getItem(STORAGE_KEYS.WISHLIST);
+      if (savedWishlist) {
+        try { setWishlist(JSON.parse(savedWishlist)); } catch (e) {}
+      }
+      const savedCouple = localStorage.getItem(STORAGE_KEYS.COUPLE);
+      if (savedCouple) {
+        try { setCouple(JSON.parse(savedCouple)); } catch (e) {}
+      }
+      const savedCards = localStorage.getItem(STORAGE_KEYS.LOYALTY_CARDS);
+      if (savedCards) {
+        try { setLoyaltyCards(JSON.parse(savedCards)); } catch (e) {}
+      }
+      const savedSizes = localStorage.getItem(STORAGE_KEYS.SIZES);
+      if (savedSizes) {
+        try { setSizes(JSON.parse(savedSizes)); } catch (e) {}
       }
 
       // Read Cookie (For PWA Home Screen Sync)
@@ -949,27 +994,11 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     };
     setTasks((prev) => [newTask, ...prev]);
 
-    if (supabase) {
-      supabase.from('tasks').insert({
-        id: newTask.id,
-        couple_id: couple.id,
-        title: newTask.title,
-        description: newTask.description,
-        category: 'Общее',
-        assigned_to: newTask.assignee || 'both',
-        due_date: newTask.dueDate,
-        is_completed: false,
-        subtasks: newTask.subtasks || [],
-        created_by: currentUser.name,
-      }).then();
-    }
-
-    sendPartnerNotification({
+    enqueueTaskMutation({
+      type: 'CREATE_TASK',
+      payload: newTask,
       coupleId: couple.id,
       senderName: currentUser.name,
-      action: 'task_created',
-      itemTitle: newTask.title,
-      details: newTask.description,
     });
   };
 
@@ -978,83 +1007,53 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       prev.map((t) => (t.id === id ? { ...t, ...data } : t))
     );
 
-    if (supabase) {
-      const updatePayload: any = {};
-      if (data.title !== undefined) updatePayload.title = data.title;
-      if (data.description !== undefined) updatePayload.description = data.description;
-      if (data.assignee !== undefined) updatePayload.assigned_to = data.assignee;
-      if (data.dueDate !== undefined) updatePayload.due_date = data.dueDate;
-      if (data.subtasks !== undefined) updatePayload.subtasks = data.subtasks;
-      if (data.isCompleted !== undefined) updatePayload.is_completed = data.isCompleted;
-
-      supabase
-        .from('tasks')
-        .update(updatePayload)
-        .eq('id', id)
-        .then();
-    }
-
-    if (data.title) {
-      sendPartnerNotification({
-        coupleId: couple.id,
-        senderName: currentUser.name,
-        action: 'task_updated',
-        itemTitle: data.title,
-      });
-    }
+    enqueueTaskMutation({
+      type: 'UPDATE_TASK',
+      payload: { id, data },
+      coupleId: couple.id,
+      senderName: currentUser.name,
+    });
   };
 
   const toggleTask = (id: string) => {
+    let toggledTitle = '';
+    let isNowCompleted = false;
+
     setTasks((prev) =>
       prev.map((t) => {
         if (t.id === id) {
-          const completed = !t.isCompleted;
-
-          if (completed) {
-            sendPartnerNotification({
-              coupleId: couple.id,
-              senderName: currentUser.name,
-              action: 'task_completed',
-              itemTitle: t.title,
-            });
-          }
-
-          if (supabase) {
-            supabase
-              .from('tasks')
-              .update({ is_completed: completed })
-              .eq('id', id)
-              .then();
-          }
-
+          isNowCompleted = !t.isCompleted;
+          toggledTitle = t.title;
           return {
             ...t,
-            isCompleted: completed,
-            completedAt: completed ? new Date().toISOString() : undefined,
+            isCompleted: isNowCompleted,
+            completedAt: isNowCompleted ? new Date().toISOString() : undefined,
           };
         }
         return t;
       })
     );
+
+    enqueueTaskMutation({
+      type: 'TOGGLE_TASK',
+      payload: { id, completed: isNowCompleted, title: toggledTitle },
+      coupleId: couple.id,
+      senderName: currentUser.name,
+    });
   };
 
   const toggleSubtask = (taskId: string, subtaskId: string) => {
+    let updatedSubtasks: any[] = [];
+    let allCompleted = false;
+
     setTasks((prev) =>
       prev.map((t) => {
         if (t.id === taskId) {
-          const updatedSubtasks = t.subtasks.map((s) =>
+          updatedSubtasks = t.subtasks.map((s) =>
             s.id === subtaskId ? { ...s, isCompleted: !s.isCompleted } : s
           );
-          const allCompleted =
+          allCompleted =
             updatedSubtasks.length > 0 && updatedSubtasks.every((s) => s.isCompleted);
-
-          if (supabase) {
-            supabase
-              .from('tasks')
-              .update({ subtasks: updatedSubtasks, is_completed: allCompleted })
-              .eq('id', taskId)
-              .then();
-          }
 
           return {
             ...t,
@@ -1065,13 +1064,24 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         return t;
       })
     );
+
+    enqueueTaskMutation({
+      type: 'TOGGLE_SUBTASK',
+      payload: { taskId, subtasks: updatedSubtasks, allCompleted },
+      coupleId: couple.id,
+      senderName: currentUser.name,
+    });
   };
 
   const deleteTask = (id: string) => {
     setTasks((prev) => prev.filter((t) => t.id !== id));
-    if (supabase) {
-      supabase.from('tasks').delete().eq('id', id).then();
-    }
+
+    enqueueTaskMutation({
+      type: 'DELETE_TASK',
+      payload: { id },
+      coupleId: couple.id,
+      senderName: currentUser.name,
+    });
   };
 
   // Sizes

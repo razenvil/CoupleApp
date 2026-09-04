@@ -21,6 +21,8 @@ import { DocumentPinModal } from '@/components/documents/DocumentPinModal';
 import { AddDocumentModal } from '@/components/documents/AddDocumentModal';
 import { VaultSettingsModal } from '@/components/documents/VaultSettingsModal';
 import { useWebPush } from '@/lib/use-web-push';
+import { OfflineBanner } from '@/components/common/OfflineBanner';
+import { GroceryModeModal } from '@/components/grocery/GroceryModeModal';
 
 // Settings & Couple Hub
 import { CoinFlipModal } from '@/components/couple/CoinFlipModal';
@@ -33,6 +35,7 @@ import { getAvatarUrl } from '@/lib/avatars';
 import {
   Plus,
   Sparkles,
+  ShoppingCart,
   Lock,
   Unlock,
   Gift,
@@ -89,6 +92,7 @@ export default function Home() {
   const [isAddDocOpen, setIsAddDocOpen] = useState(false);
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   const [isVaultSettingsOpen, setIsVaultSettingsOpen] = useState(false);
+  const [isGroceryModeOpen, setIsGroceryModeOpen] = useState(false);
 
   // Web Push Hook
   const {
@@ -163,6 +167,9 @@ export default function Home() {
 
   return (
     <div className="min-h-screen pb-32 pt-2">
+      {/* Offline Status & Sync Queue Banner */}
+      <OfflineBanner />
+
       {/* iOS 26 Dynamic Island & Live Activity Header */}
       <HeaderWidget onOpenPwa={() => setIsPwaOpen(true)} />
 
@@ -173,7 +180,7 @@ export default function Home() {
         {/* ================================================================= */}
         {activeTab === 'tasks' && (
           <div className="space-y-4">
-            {/* Apple Large Title + Action Button */}
+            {/* Apple Large Title + Action Buttons */}
             <div className="flex items-end justify-between pt-1">
               <div>
                 <h1 className="text-[32px] font-black tracking-tight text-foreground leading-none">
@@ -186,16 +193,30 @@ export default function Home() {
                 </p>
               </div>
 
-              <button
-                onClick={() => {
-                  haptic.medium();
-                  setIsAddTaskOpen(true);
-                }}
-                className="w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center shadow-lg hover:bg-primary-hover ios-press"
-                title="Новая задача"
-              >
-                <Plus size={20} strokeWidth={2.6} />
-              </button>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => {
+                    haptic.medium();
+                    setIsGroceryModeOpen(true);
+                  }}
+                  className="px-3 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-bold flex items-center space-x-1.5 shadow-xs hover:bg-emerald-500/25 ios-press"
+                  title="Режим «Я в магазине»"
+                >
+                  <ShoppingCart size={14} strokeWidth={2.4} />
+                  <span>В магазине</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    haptic.medium();
+                    setIsAddTaskOpen(true);
+                  }}
+                  className="w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center shadow-lg hover:bg-primary-hover ios-press"
+                  title="Новая задача"
+                >
+                  <Plus size={20} strokeWidth={2.6} />
+                </button>
+              </div>
             </div>
 
             {/* Apple Native UISegmentedControl */}
@@ -850,6 +871,12 @@ export default function Home() {
       <PwaModal
         isOpen={isPwaOpen}
         onClose={() => setIsPwaOpen(false)}
+      />
+
+      {/* Smart Grocery Mode Modal */}
+      <GroceryModeModal
+        isOpen={isGroceryModeOpen}
+        onClose={() => setIsGroceryModeOpen(false)}
       />
     </div>
   );
