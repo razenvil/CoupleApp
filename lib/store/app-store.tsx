@@ -282,6 +282,28 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         setIsDarkMode(true);
       }
 
+      // Read Cookie (For PWA Home Screen Sync)
+      if (typeof document !== 'undefined') {
+        const cookies = document.cookie.split(';');
+        const pwaAuthCookie = cookies.find(c => c.trim().startsWith('couple_pwa_auth='));
+        if (pwaAuthCookie && (!savedUser || savedUser === 'user_alex')) {
+          try {
+            const val = decodeURIComponent(pwaAuthCookie.split('=')[1]);
+            const parsed = JSON.parse(val);
+            if (parsed.id) {
+              activeId = parsed.id;
+              activeCode = parsed.couple_id || activeCode;
+              localStorage.setItem(STORAGE_KEYS.CURRENT_USER, activeId);
+              if (activeCode && activeCode.startsWith('CP-')) {
+                localStorage.setItem(STORAGE_KEYS.COUPLE_ID, activeCode);
+              }
+            }
+          } catch (e) {
+            console.warn('Failed to parse cookie:', e);
+          }
+        }
+      }
+
       // Check URL parameters for seamless PWA link authentication
       let urlAuthId: string | null = null;
       let urlAuthName: string | null = null;
@@ -311,6 +333,17 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         setCurrentUserId(activeId);
         setIsAuthenticated(true);
         localStorage.setItem(STORAGE_KEYS.CURRENT_USER, activeId);
+        
+        // Save to cookie for PWA handover
+        if (typeof document !== 'undefined') {
+          const pwaAuthData = JSON.stringify({
+            id: activeId,
+            name: urlAuthName || 'Пользователь',
+            avatar: urlAuthAvatar || 'memoji_1',
+            couple_id: pwaCoupleId || ''
+          });
+          document.cookie = `couple_pwa_auth=${encodeURIComponent(pwaAuthData)}; path=/; max-age=31536000; SameSite=Lax`;
+        }
 
         // Clean query parameters from URL without reloading
         window.history.replaceState({}, '', window.location.pathname);
@@ -578,24 +611,53 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         return { success: false, message: 'Пара с таким кодом не найдена. Проверьте код.' };
       }
 
-      if (existingProfiles.length >= 2) {
-        return { success: false, message: 'В этой паре уже зарегистрировано 2 партнера.' };
-      }
-
-      const myId = `user_${Date.now()}`;
       const cleanName = myName.trim();
+      // Check if user is trying to log back into their existing profile
+      const existingUser = existingProfiles.find(
+        (p: any) => p.name.trim().toLowerCase() === cleanName.toLowerCase()
+      );
 
-      await supabase.from('profiles').insert({
-        id: myId,
-        couple_id: cleanCode,
-        name: cleanName,
-        avatar,
-        role: 'partner_b',
-      });
+      let myId: string;
+
+      if (existingUser) {
+        // User exists, re-attach them!
+        myId = existingUser.id;
+        
+        // Optionally update their avatar if they selected a new one
+        if (avatar && existingUser.avatar !== avatar) {
+           await supabase.from('profiles').update({ avatar }).eq('id', myId);
+        }
+      } else {
+        // Trying to join as a new partner
+        if (existingProfiles.length >= 2) {
+          return { success: false, message: 'В этой паре уже зарегистрировано 2 партнера. Убедитесь, что вы вводите своё имя точно так же, как при регистрации.' };
+        }
+
+        myId = `user_${Date.now()}`;
+        await supabase.from('profiles').insert({
+          id: myId,
+          couple_id: cleanCode,
+          name: cleanName,
+          avatar,
+          role: 'partner_b',
+        });
+      }
 
       setCurrentUserId(myId);
       localStorage.setItem(STORAGE_KEYS.CURRENT_USER, myId);
       localStorage.setItem(STORAGE_KEYS.COUPLE_ID, cleanCode);
+      
+      // Also set a cookie so standalone PWA can inherit the session from Safari
+      if (typeof document !== 'undefined') {
+        const pwaAuthData = JSON.stringify({
+          id: myId,
+          name: cleanName,
+          avatar: avatar || existingUser?.avatar || 'memoji_1',
+          couple_id: cleanCode
+        });
+        document.cookie = `couple_pwa_auth=${encodeURIComponent(pwaAuthData)}; path=/; max-age=31536000; SameSite=Lax`;
+      }
+      
       setIsAuthenticated(true);
 
       // Notify partner

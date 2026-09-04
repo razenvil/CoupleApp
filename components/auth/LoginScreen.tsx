@@ -153,11 +153,20 @@ export const LoginScreen: React.FC = () => {
               </label>
               <input
                 type="text"
-                placeholder="CP-7482"
+                placeholder="CP-7482 или ссылка-приглашение"
                 value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
-                className="w-full px-4 py-3 rounded-2xl bg-secondary border border-border text-foreground font-mono text-center tracking-widest text-lg font-bold focus:outline-none focus:ring-2 focus:ring-primary/40 uppercase"
-                maxLength={7}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  // If user pasted the auth link directly!
+                  if (val.includes('auth_id=')) {
+                    if (typeof window !== 'undefined') {
+                      window.location.href = val; // let the URL params handler log them in
+                    }
+                    return;
+                  }
+                  setCode(val.toUpperCase());
+                }}
+                className="w-full px-4 py-3 rounded-2xl bg-secondary border border-border text-foreground font-mono text-center tracking-widest text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/40"
               />
             </div>
 
