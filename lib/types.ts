@@ -87,6 +87,7 @@ export interface LinkParseResult {
   price?: number;
   currency?: string;
   imageUrl?: string;
+  link?: string;
   source?: 'wildberries' | 'ozon' | 'opengraph' | 'unknown';
   success: boolean;
   error?: string;

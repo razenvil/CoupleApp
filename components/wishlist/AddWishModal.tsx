@@ -47,6 +47,7 @@ export const AddWishModal: React.FC<AddWishModalProps> = ({ isOpen, onClose }) =
         setTitleError(false);
         if (data.price) setPrice(String(data.price));
         if (data.imageUrl) setImageUrl(data.imageUrl);
+        if (data.link) setLink(data.link);
 
         const sourceLabel =
           data.source === 'wildberries'
@@ -107,22 +108,22 @@ export const AddWishModal: React.FC<AddWishModalProps> = ({ isOpen, onClose }) =
       isOpen={isOpen}
       onClose={onClose}
       title="Добавить в «Хотелки»"
-      subtitle="Вставьте ссылку на Wildberries, Ozon или любой магазин"
+      subtitle="Вставьте ссылку или артикул товара на Wildberries или Ozon"
     >
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* URL Link Input with Quick Paste and Auto-Parse */}
+        {/* URL Link or Article Input with Quick Paste and Auto-Parse */}
         <div>
           <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1">
-            Ссылка на товар (WB, Ozon, магазин)
+            Ссылка на товар или артикул (WB, Ozon)
           </label>
           <div className="flex items-center space-x-1.5">
             <div className="relative flex-1">
               <input
-                type="url"
+                type="text"
                 value={link}
                 onChange={(e) => setLink(e.target.value)}
                 className="w-full pl-9 pr-3 py-2.5 rounded-[14px] bg-secondary border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
-                placeholder="https://wildberries.ru/catalog/..."
+                placeholder="Ссылка или артикул WB (напр. 1046656767)..."
               />
               <LinkIcon
                 size={16}
