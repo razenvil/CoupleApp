@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Lock, Delete, ScanFace, CheckCircle2 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
+import { useAppStore } from '@/lib/store/app-store';
 import { haptic } from '@/lib/telegram';
 
 interface DocumentPinModalProps {
@@ -11,18 +12,28 @@ interface DocumentPinModalProps {
   onCancel: () => void;
 }
 
-const CORRECT_PIN = '1234';
-
 export const DocumentPinModal: React.FC<DocumentPinModalProps> = ({
   isOpen,
   onSuccess,
   onCancel,
 }) => {
+  const { couple, currentUser } = useAppStore();
   const [pin, setPin] = useState<string>('');
   const [isError, setIsError] = useState<boolean>(false);
   const [isBiometricSuccess, setIsBiometricSuccess] = useState<boolean>(false);
+  const [infoNotice, setInfoNotice] = useState<string | null>(null);
 
-  if (!isOpen) return null;
+  const correctPin = couple.vaultPin || '1234';
+  const isLocked = couple.isVaultLocked !== undefined ? couple.isVaultLocked : true;
+
+  // If vault is not locked, bypass PIN entry immediately
+  useEffect(() => {
+    if (isOpen && !isLocked) {
+      onSuccess();
+    }
+  }, [isOpen, isLocked, onSuccess]);
+
+  if (!isOpen || !isLocked) return null;
 
   const handleDigit = (digit: string) => {
     if (pin.length >= 4) return;
@@ -31,7 +42,7 @@ export const DocumentPinModal: React.FC<DocumentPinModalProps> = ({
     setPin(newPin);
 
     if (newPin.length === 4) {
-      if (newPin === CORRECT_PIN || newPin === '0000') {
+      if (newPin === correctPin || newPin === '0000') {
         haptic.success();
         setTimeout(() => {
           onSuccess();
@@ -55,15 +66,98 @@ export const DocumentPinModal: React.FC<DocumentPinModalProps> = ({
     }
   };
 
-  const handleBiometric = () => {
+  const handleBiometric = async () => {
     haptic.medium();
-    setIsBiometricSuccess(true);
-    setTimeout(() => {
-      haptic.success();
-      onSuccess();
-      setIsBiometricSuccess(false);
-      setPin('');
-    }, 500);
+    setInfoNotice(null);
+
+    if (!window.PublicKeyCredential) {
+      setInfoNotice('Биометрия не поддерживается в этом браузере');
+      haptic.warning();
+      return;
+    }
+
+    try {
+      const savedCredentialId = localStorage.getItem('couple_vault_biometric_id');
+
+      if (savedCredentialId) {
+        // Authenticate with existing biometric credential
+        const challenge = new Uint8Array(32);
+        window.crypto.getRandomValues(challenge);
+
+        const binaryId = Uint8Array.from(atob(savedCredentialId), (c) => c.charCodeAt(0));
+
+        const assertion: any = await navigator.credentials.get({
+          publicKey: {
+            challenge,
+            timeout: 60000,
+            userVerification: 'required',
+            allowCredentials: [
+              {
+                id: binaryId,
+                type: 'public-key',
+              },
+            ],
+          },
+        });
+
+        if (assertion) {
+          setIsBiometricSuccess(true);
+          haptic.success();
+          setTimeout(() => {
+            onSuccess();
+            setIsBiometricSuccess(false);
+            setPin('');
+          }, 350);
+          return;
+        }
+      } else {
+        // Register new biometric credential on this device
+        const challenge = new Uint8Array(32);
+        window.crypto.getRandomValues(challenge);
+
+        const credential: any = await navigator.credentials.create({
+          publicKey: {
+            challenge,
+            rp: { name: 'Мы Вместе Сейф', id: window.location.hostname },
+            user: {
+              id: Uint8Array.from((currentUser?.id || 'user').slice(0, 16), (c) => c.charCodeAt(0)),
+              name: currentUser?.name || 'Партнер',
+              displayName: currentUser?.name || 'Партнер',
+            },
+            pubKeyCredParams: [
+              { alg: -7, type: 'public-key' },
+              { alg: -257, type: 'public-key' },
+            ],
+            authenticatorSelection: {
+              authenticatorAttachment: 'platform',
+              userVerification: 'required',
+            },
+            timeout: 60000,
+          },
+        });
+
+        if (credential) {
+          const rawId = new Uint8Array(credential.rawId);
+          const base64Id = btoa(String.fromCharCode.apply(null, Array.from(rawId)));
+          localStorage.setItem('couple_vault_biometric_id', base64Id);
+
+          setIsBiometricSuccess(true);
+          haptic.success();
+          setTimeout(() => {
+            onSuccess();
+            setIsBiometricSuccess(false);
+            setPin('');
+          }, 350);
+          return;
+        }
+      }
+    } catch (err: any) {
+      console.warn('Biometric unlock cancelled or failed:', err);
+      if (err.name !== 'NotAllowedError') {
+        setInfoNotice('Не удалось подтвердить Face ID');
+      }
+      haptic.warning();
+    }
   };
 
   return (
@@ -86,7 +180,7 @@ export const DocumentPinModal: React.FC<DocumentPinModalProps> = ({
           Сейф документов
         </h3>
         <p className="text-xs text-muted-foreground text-center mt-1 mb-6">
-          Введите 4-значный код безопасности пары
+          Введите 4-значный код безопасности вашей пары
         </p>
 
         {/* 4 PIN Dots */}
@@ -128,7 +222,7 @@ export const DocumentPinModal: React.FC<DocumentPinModalProps> = ({
           <button
             onClick={handleBiometric}
             className="w-16 h-16 mx-auto rounded-full bg-transparent hover:bg-secondary/50 text-primary flex items-center justify-center ios-tap-scale"
-            title="Войти по FaceID / Отпечатку"
+            title="Войти по Face ID / Отпечатку"
           >
             <ScanFace size={24} />
           </button>
@@ -151,11 +245,17 @@ export const DocumentPinModal: React.FC<DocumentPinModalProps> = ({
           </button>
         </div>
 
-        {/* Demo Hint & Cancel */}
+        {/* Notice & Cancel */}
         <div className="mt-8 flex flex-col items-center space-y-2 text-center">
-          <span className="text-[11px] text-muted-foreground bg-secondary/80 px-2.5 py-1 rounded-full border border-border">
-            💡 Демо-код: <strong className="text-foreground">1234</strong> или нажмите FaceID
-          </span>
+          {infoNotice ? (
+            <span className="text-[11px] text-destructive bg-destructive/10 px-2.5 py-1 rounded-full border border-destructive/20">
+              {infoNotice}
+            </span>
+          ) : (
+            <span className="text-[11px] text-muted-foreground bg-secondary/80 px-2.5 py-1 rounded-full border border-border">
+              💡 Нажмите на значок Face ID для быстрого входа
+            </span>
+          )}
 
           <button
             onClick={onCancel}

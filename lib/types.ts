@@ -16,6 +16,8 @@ export interface CoupleInfo {
   startDate: string; // ISO date string: when they started dating
   anniversaryTitle?: string;
   inviteCode: string;
+  vaultPin?: string;
+  isVaultLocked?: boolean;
 }
 
 export interface DocumentItem {

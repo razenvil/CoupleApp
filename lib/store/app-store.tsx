@@ -55,6 +55,7 @@ interface AppContextType {
   loginWithCoupleCode: (code: string, myName: string, avatar?: string) => Promise<{ success: boolean; message?: string }>;
   loginAsNewCouple: (myName: string, avatar?: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => void;
+  updateVaultSettings: (pin?: string, isLocked?: boolean) => void;
 
   // Loyalty Cards
   addLoyaltyCard: (card: Omit<LoyaltyCard, 'id' | 'createdAt' | 'coupleId'>) => void;
@@ -97,6 +98,16 @@ const STORAGE_KEYS = {
 
 function generateCoupleCode(): string {
   return `CP-${Math.floor(1000 + Math.random() * 9000)}`;
+}
+
+function getClientDeviceId(): string {
+  if (typeof window === 'undefined') return '';
+  let id = localStorage.getItem('couple_app_device_id');
+  if (!id) {
+    id = 'dev_' + Math.random().toString(36).substring(2, 11) + Date.now().toString(36);
+    localStorage.setItem('couple_app_device_id', id);
+  }
+  return id;
 }
 
 export function AppStoreProvider({ children }: { children: React.ReactNode }) {
@@ -152,6 +163,22 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
                 avatar: 'memoji_2',
                 role: 'partner_b',
               },
+        }));
+      }
+
+      // Fetch couple row for vault settings and anniversary
+      const { data: coupleRow } = await supabase
+        .from('couples')
+        .select('*')
+        .eq('id', coupleId)
+        .maybeSingle();
+
+      if (coupleRow) {
+        setCouple((prev) => ({
+          ...prev,
+          anniversaryTitle: coupleRow.name || prev.anniversaryTitle,
+          vaultPin: coupleRow.vault_pin || prev.vaultPin || '1234',
+          isVaultLocked: coupleRow.is_vault_locked !== undefined ? Boolean(coupleRow.is_vault_locked) : true,
         }));
       }
 
@@ -612,6 +639,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       }
 
       const cleanName = myName.trim();
+      const currentDeviceId = getClientDeviceId();
+
       // Check if user is trying to log back into their existing profile
       const existingUser = existingProfiles.find(
         (p: any) => p.name.trim().toLowerCase() === cleanName.toLowerCase()
@@ -620,13 +649,20 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       let myId: string;
 
       if (existingUser) {
-        // User exists, re-attach them!
-        myId = existingUser.id;
-        
-        // Optionally update their avatar if they selected a new one
-        if (avatar && existingUser.avatar !== avatar) {
-           await supabase.from('profiles').update({ avatar }).eq('id', myId);
+        // ENFORCE SINGLE SESSION ON PWA:
+        if (existingUser.active_device_id && existingUser.active_device_id !== currentDeviceId) {
+          return {
+            success: false,
+            message: `⚠️ Профиль «${existingUser.name}» уже активен на другом телефоне! Сначала нажмите «Выйти» на основном устройстве или отправьте команду /logout в нашем Telegram-боте.`,
+          };
         }
+
+        myId = existingUser.id;
+
+        // Optionally update their avatar and bind active device id
+        const updates: any = { active_device_id: currentDeviceId };
+        if (avatar && existingUser.avatar !== avatar) updates.avatar = avatar;
+        await supabase.from('profiles').update(updates).eq('id', myId);
       } else {
         // Trying to join as a new partner
         if (existingProfiles.length >= 2) {
@@ -640,6 +676,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
           name: cleanName,
           avatar,
           role: 'partner_b',
+          active_device_id: currentDeviceId,
         });
       }
 
@@ -685,6 +722,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     if (!cleanName) return { success: false, message: 'Введите ваше имя' };
     const newCode = generateCoupleCode();
     const myId = `user_${Date.now()}`;
+    const currentDeviceId = getClientDeviceId();
 
     if (supabase) {
       try {
@@ -702,6 +740,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
           name: cleanName,
           avatar,
           role: 'partner_a',
+          active_device_id: currentDeviceId,
         });
       } catch (err) {
         console.warn('Supabase create couple error:', err);
@@ -733,11 +772,44 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     return { success: true };
   };
 
-  // Logout / Switch
-  const logout = () => {
+  // Logout / Disconnect Device
+  const logout = async () => {
+    try {
+      if (supabase && currentUserId) {
+        await supabase.from('profiles').update({ active_device_id: null }).eq('id', currentUserId);
+      }
+    } catch (err) {
+      console.warn('Logout active_device_id clear error:', err);
+    }
+
+    if (typeof document !== 'undefined') {
+      document.cookie = 'couple_pwa_auth=; path=/; max-age=0';
+    }
     localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
     localStorage.removeItem(STORAGE_KEYS.COUPLE_ID);
     setIsAuthenticated(false);
+    setCurrentUserId('user_alex');
+    setCouple(INITIAL_COUPLE);
+  };
+
+  // Update Vault Security Settings (PIN code, lock state)
+  const updateVaultSettings = async (pin?: string, isLocked?: boolean) => {
+    setCouple((prev) => ({
+      ...prev,
+      vaultPin: pin !== undefined ? pin : prev.vaultPin,
+      isVaultLocked: isLocked !== undefined ? isLocked : prev.isVaultLocked,
+    }));
+
+    if (couple.id && supabase) {
+      const updateData: any = {};
+      if (pin !== undefined) updateData.vault_pin = pin;
+      if (isLocked !== undefined) updateData.is_vault_locked = isLocked;
+      try {
+        await supabase.from('couples').update(updateData).eq('id', couple.id);
+      } catch (err) {
+        console.warn('Could not update vault settings in supabase:', err);
+      }
+    }
   };
 
   // Documents
@@ -1070,6 +1142,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         loginWithCoupleCode,
         loginAsNewCouple,
         logout,
+        updateVaultSettings,
         addLoyaltyCard,
         deleteLoyaltyCard,
         addDocument,

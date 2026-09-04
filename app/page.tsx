@@ -19,6 +19,8 @@ import { ArchiveModal } from '@/components/wishlist/ArchiveModal';
 import { DocumentCard } from '@/components/documents/DocumentCard';
 import { DocumentPinModal } from '@/components/documents/DocumentPinModal';
 import { AddDocumentModal } from '@/components/documents/AddDocumentModal';
+import { VaultSettingsModal } from '@/components/documents/VaultSettingsModal';
+import { useWebPush } from '@/lib/use-web-push';
 
 // Settings & Couple Hub
 import { CoinFlipModal } from '@/components/couple/CoinFlipModal';
@@ -46,6 +48,9 @@ import {
   Heart,
   Loader2,
   Smartphone,
+  Bell,
+  BellRing,
+  LogOut,
 } from 'lucide-react';
 import { LoginScreen } from '@/components/auth/LoginScreen';
 import { PwaModal } from '@/components/couple/PwaModal';
@@ -72,6 +77,7 @@ export default function Home() {
     markAsGifted,
     deleteArchivedItem,
     deleteDocument,
+    logout,
   } = useAppStore();
 
   const [activeTab, setActiveTab] = useState<TabType>('tasks');
@@ -82,6 +88,16 @@ export default function Home() {
   const [isArchiveOpen, setIsArchiveOpen] = useState(false);
   const [isAddDocOpen, setIsAddDocOpen] = useState(false);
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
+  const [isVaultSettingsOpen, setIsVaultSettingsOpen] = useState(false);
+
+  // Web Push Hook
+  const {
+    isSupported: isPushSupported,
+    isSubscribed: isPushSubscribed,
+    isLoading: isPushLoading,
+    subscribe: subscribeToPush,
+    unsubscribe: unsubscribeFromPush,
+  } = useWebPush();
 
   // Couple Hub Modals
   const [isCoinFlipOpen, setIsCoinFlipOpen] = useState(false);
@@ -367,6 +383,17 @@ export default function Home() {
                   <div className="flex items-center space-x-2">
                     <button
                       onClick={() => {
+                        haptic.light();
+                        setIsVaultSettingsOpen(true);
+                      }}
+                      className="w-9 h-9 rounded-full bg-secondary/80 text-muted-foreground hover:text-foreground flex items-center justify-center ios-press shadow-xs"
+                      title="Настройки сейфа (PIN и Face ID)"
+                    >
+                      <Shield size={16} />
+                    </button>
+
+                    <button
+                      onClick={() => {
                         haptic.heavy();
                         lockDocuments();
                       }}
@@ -643,6 +670,100 @@ export default function Home() {
                   </div>
                   <ChevronRight size={16} className="text-muted-foreground/60" />
                 </button>
+
+                {/* 🛡️ Безопасность сейфа */}
+                <button
+                  onClick={() => {
+                    haptic.light();
+                    setIsVaultSettingsOpen(true);
+                  }}
+                  className="w-full p-3.5 flex items-center justify-between hover:bg-secondary/40 transition-colors text-left ios-press"
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 text-white flex items-center justify-center shadow-xs shrink-0">
+                      <Shield size={18} />
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-foreground block">
+                        Безопасность сейфа
+                      </span>
+                      <span className="text-[11px] text-muted-foreground font-medium block">
+                        PIN-код, Face ID / Touch ID
+                      </span>
+                    </div>
+                  </div>
+                  <ChevronRight size={16} className="text-muted-foreground/60" />
+                </button>
+
+                {/* 🔔 Push-уведомления на телефон */}
+                {isPushSupported && (
+                  <div className="w-full p-3.5 flex items-center justify-between hover:bg-secondary/40 transition-colors text-left">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-rose-500 text-white flex items-center justify-center shadow-xs shrink-0">
+                        {isPushSubscribed ? <BellRing size={18} /> : <Bell size={18} />}
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-foreground block">
+                          Push-уведомления PWA
+                        </span>
+                        <span className="text-[11px] text-muted-foreground font-medium block">
+                          {isPushSubscribed ? 'Активны на этом телефоне' : 'Уведомления о задачах и желаниях'}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isPushLoading}
+                      onClick={async () => {
+                        haptic.selection();
+                        if (isPushSubscribed) {
+                          await unsubscribeFromPush(couple.id);
+                        } else {
+                          await subscribeToPush(currentUser.id, couple.id);
+                        }
+                      }}
+                      className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all ios-press shrink-0 ${
+                        isPushSubscribed
+                          ? 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/20'
+                          : 'bg-primary text-white shadow-xs hover:bg-primary-hover'
+                      }`}
+                    >
+                      {isPushLoading ? (
+                        <Loader2 size={14} className="animate-spin" />
+                      ) : isPushSubscribed ? (
+                        'Включены'
+                      ) : (
+                        'Включить'
+                      )}
+                    </button>
+                  </div>
+                )}
+
+                {/* 🚪 Выйти из аккаунта (Освободить устройство) */}
+                <button
+                  onClick={() => {
+                    haptic.heavy();
+                    if (window.confirm('Вы уверены, что хотите выйти из аккаунта на этом телефоне?')) {
+                      logout();
+                    }
+                  }}
+                  className="w-full p-3.5 flex items-center justify-between hover:bg-destructive/10 transition-colors text-left ios-press text-destructive"
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className="w-9 h-9 rounded-xl bg-destructive/15 text-destructive flex items-center justify-center shadow-xs shrink-0">
+                      <LogOut size={18} />
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold block">
+                        Выйти из аккаунта
+                      </span>
+                      <span className="text-[11px] text-muted-foreground font-medium block">
+                        Освободить сессию для другого устройства
+                      </span>
+                    </div>
+                  </div>
+                  <ChevronRight size={16} className="text-destructive/60" />
+                </button>
               </div>
             </div>
           </div>
@@ -654,7 +775,7 @@ export default function Home() {
         activeTab={activeTab}
         onChangeTab={(tab) => {
           setActiveTab(tab);
-          if (tab === 'documents' && !isDocumentsUnlocked) {
+          if (tab === 'documents' && !isDocumentsUnlocked && (couple.isVaultLocked !== false)) {
             setIsPinModalOpen(true);
           }
         }}
@@ -693,6 +814,11 @@ export default function Home() {
           setActiveTab('documents');
         }}
         onCancel={() => setIsPinModalOpen(false)}
+      />
+
+      <VaultSettingsModal
+        isOpen={isVaultSettingsOpen}
+        onClose={() => setIsVaultSettingsOpen(false)}
       />
 
       {/* Couple Hub Modals */}

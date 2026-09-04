@@ -17,6 +17,8 @@ export const INITIAL_COUPLE: CoupleInfo = {
   startDate: new Date().toISOString(),
   anniversaryTitle: 'Наша дата',
   inviteCode: '',
+  vaultPin: '1234',
+  isVaultLocked: true,
 };
 
 // Clean production initial arrays — filled directly by the couple

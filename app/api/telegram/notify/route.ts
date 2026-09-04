@@ -74,6 +74,70 @@ export async function POST(req: NextRequest) {
         text = `${prefix}🔔 Обновление от <b>${senderName}</b>:\n«<b>${itemTitle}</b>»`;
     }
 
+    // Format plain text for Web Push
+    let pushTitle = 'Мы Вместе ❤️';
+    let pushBody = `${senderName}: ${itemTitle}`;
+    switch (action) {
+      case 'task_created':
+        pushBody = `📋 ${senderName} добавил(а) задачу: «${itemTitle}»`;
+        break;
+      case 'task_completed':
+        pushBody = `✅ ${senderName} выполнил(а) задачу: «${itemTitle}» 🎉`;
+        break;
+      case 'wish_added':
+        pushBody = `🎁 ${senderName} добавил(а) в вишлист: «${itemTitle}» ✨`;
+        break;
+      case 'doc_added':
+        pushBody = `🛡️ ${senderName} сохранил(а) документ: «${itemTitle}»`;
+        break;
+      default:
+        pushBody = `🔔 ${senderName}: ${itemTitle}`;
+    }
+
+    // DISPATCH WEB PUSH NOTIFICATIONS TO PARTNER
+    if (coupleId) {
+      (async () => {
+        try {
+          const { sendWebPush, globalPushSubscriptions } = await import('@/lib/web-push-server');
+
+          // 1. From in-memory map
+          const inMem = globalPushSubscriptions.get(coupleId) || [];
+          for (const item of inMem) {
+            // Do not push back to sender if senderChatId/userId matches
+            if (String(item.userId) !== String(senderChatId)) {
+              await sendWebPush(item.subscription, {
+                title: pushTitle,
+                body: pushBody,
+                url: '/',
+              });
+            }
+          }
+
+          // 2. From Supabase if available
+          if (supabase) {
+            const { data: dbSubs } = await supabase
+              .from('web_push_subscriptions')
+              .select('*')
+              .eq('couple_id', coupleId);
+
+            if (dbSubs && dbSubs.length > 0) {
+              for (const row of dbSubs) {
+                if (String(row.user_id) !== String(senderChatId)) {
+                  await sendWebPush(row.subscription, {
+                    title: pushTitle,
+                    body: pushBody,
+                    url: '/',
+                  });
+                }
+              }
+            }
+          }
+        } catch (pushErr) {
+          console.warn('Web push broadcast error:', pushErr);
+        }
+      })();
+    }
+
     if (!BOT_TOKEN) {
       console.log(`[Telegram Notification Local Log] ${text}`);
       return NextResponse.json({ ok: true, mocked: true, message: text });

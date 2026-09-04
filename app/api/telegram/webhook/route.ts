@@ -135,6 +135,39 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
+    // 3. Command /logout or /reset (Failsafe remote reset of active device)
+    if (text.startsWith('/logout') || text.startsWith('/reset')) {
+      if (fromUser?.id) {
+        try {
+          const { supabase } = await import('@/lib/supabase');
+          if (supabase) {
+            await supabase
+              .from('profiles')
+              .update({ active_device_id: null })
+              .eq('telegram_id', fromUser.id);
+          }
+        } catch (e) {
+          console.warn('Telegram webhook /logout reset error:', e);
+        }
+      }
+
+      await sendTelegramMessage(
+        chatId,
+        `🚪 <b>Привязка устройства сброшена!</b>\n\nАктивная сессия PWA успешно завершена. Теперь вы можете войти в приложение с нового телефона без блокировки.`,
+        {
+          inline_keyboard: [
+            [
+              {
+                text: '📱 Открыть «Мы Вместе»',
+                web_app: { url: APP_URL },
+              },
+            ],
+          ],
+        }
+      );
+      return NextResponse.json({ ok: true });
+    }
+
     // Default reply for any other text
     await sendTelegramMessage(
       chatId,
