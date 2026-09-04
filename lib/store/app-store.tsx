@@ -212,6 +212,33 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         }
       });
 
+    // Fetch wishlist
+    supabase
+      .from('wishlist_items')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (!error && data && data.length > 0) {
+          const mappedWishlist: WishlistItem[] = data.map((row: any) => ({
+            id: row.id,
+            coupleId: row.couple_id || DEFAULT_COUPLE_ID,
+            authorId: row.created_by === currentUser.name ? currentUser.id : partnerUser.id,
+            authorName: row.created_by || 'Партнер',
+            title: row.title,
+            price: row.price ? Number(row.price) : undefined,
+            currency: row.currency || '₽',
+            link: row.url || undefined,
+            imageUrl: row.image_url || undefined,
+            priority: row.priority || 'medium',
+            isReservedByPartner: false,
+            isGifted: Boolean(row.is_purchased),
+            notes: row.description || undefined,
+            createdAt: row.created_at,
+          }));
+          setWishlist(mappedWishlist);
+        }
+      });
+
     // Fetch profiles to sync partner details
     supabase
       .from('profiles')
@@ -418,6 +445,13 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         return item;
       })
     );
+    if (supabase) {
+      supabase
+        .from('wishlist_items')
+        .update({ is_purchased: true })
+        .eq('id', id)
+        .then();
+    }
   };
 
   const deleteArchivedItem = (id: string) => {

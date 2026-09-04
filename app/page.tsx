@@ -108,8 +108,8 @@ export default function Home() {
   const archivedWishlist = wishlist.filter((w) => w.isGifted);
 
   const displayedWishlist = activeWishlist.filter((w) => {
-    if (wishlistAuthorFilter === 'partner') return w.authorId === partnerUser.id;
-    if (wishlistAuthorFilter === 'me') return w.authorId === currentUser.id;
+    if (wishlistAuthorFilter === 'partner') return w.authorId === partnerUser.id || w.authorName === partnerUser.name;
+    if (wishlistAuthorFilter === 'me') return w.authorId === currentUser.id || w.authorName === currentUser.name;
     return true;
   });
 

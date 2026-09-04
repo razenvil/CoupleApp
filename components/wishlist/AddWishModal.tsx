@@ -12,7 +12,7 @@ interface AddWishModalProps {
 }
 
 export const AddWishModal: React.FC<AddWishModalProps> = ({ isOpen, onClose }) => {
-  const { currentUser, couple, addWishlistItem } = useAppStore();
+  const { currentUser, addWishlistItem } = useAppStore();
 
   const [link, setLink] = useState('');
   const [title, setTitle] = useState('');
@@ -22,11 +22,14 @@ export const AddWishModal: React.FC<AddWishModalProps> = ({ isOpen, onClose }) =
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('high');
   const [isParsing, setIsParsing] = useState(false);
   const [parseStatus, setParseStatus] = useState<string | null>(null);
+  const [isSuccessStatus, setIsSuccessStatus] = useState(false);
+  const [titleError, setTitleError] = useState(false);
 
   const handleParse = async () => {
     if (!link.trim()) return;
     setIsParsing(true);
     setParseStatus('Опрашиваем каталог магазина...');
+    setIsSuccessStatus(false);
     haptic.light();
 
     try {
@@ -38,9 +41,10 @@ export const AddWishModal: React.FC<AddWishModalProps> = ({ isOpen, onClose }) =
 
       const data = await res.json();
 
-      if (data.success) {
+      if (data.success && data.title) {
         haptic.success();
-        if (data.title) setTitle(data.title);
+        setTitle(data.title);
+        setTitleError(false);
         if (data.price) setPrice(String(data.price));
         if (data.imageUrl) setImageUrl(data.imageUrl);
 
@@ -49,33 +53,30 @@ export const AddWishModal: React.FC<AddWishModalProps> = ({ isOpen, onClose }) =
             ? 'Wildberries'
             : data.source === 'ozon'
             ? 'Ozon'
-            : 'сайта';
-        setParseStatus(`✨ Данные успешно получены с ${sourceLabel}!`);
+            : 'магазина';
+        setParseStatus(`✨ Успешно найдено на ${sourceLabel}: «${data.title.slice(0, 32)}...»`);
+        setIsSuccessStatus(true);
       } else {
         haptic.warning();
-        setParseStatus(data.error || 'Магазин ограничил автопарсинг. Заполните поля вручную');
+        setIsSuccessStatus(false);
+        setParseStatus(data.error || 'Магазин ограничил автопарсинг. Введите название вручную');
       }
-    } catch (e: any) {
+    } catch {
       haptic.warning();
-      setParseStatus('Не удалось подключиться к парсеру. Заполните поля вручную');
+      setIsSuccessStatus(false);
+      setParseStatus('Не удалось подключиться к парсеру. Введите данные вручную');
     } finally {
       setIsParsing(false);
     }
   };
 
-  const handlePasteClipboard = async () => {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (text) {
-        setLink(text);
-        haptic.light();
-      }
-    } catch {}
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    if (!title.trim()) {
+      setTitleError(true);
+      haptic.warning();
+      return;
+    }
 
     addWishlistItem({
       authorId: currentUser.id,
@@ -97,6 +98,7 @@ export const AddWishModal: React.FC<AddWishModalProps> = ({ isOpen, onClose }) =
     setImageUrl('');
     setNotes('');
     setParseStatus(null);
+    setTitleError(false);
     onClose();
   };
 
@@ -151,18 +153,18 @@ export const AddWishModal: React.FC<AddWishModalProps> = ({ isOpen, onClose }) =
           {/* Parse Status message */}
           {parseStatus && (
             <p
-              className={`text-xs mt-1.5 px-2.5 py-1 rounded-[8px] flex items-center gap-1 ${
-                parseStatus.includes('успешно')
+              className={`text-xs mt-1.5 px-2.5 py-1 rounded-[8px] flex items-center gap-1.5 ${
+                isSuccessStatus
                   ? 'bg-emerald-500/10 text-emerald-600 font-medium'
                   : 'bg-amber-500/10 text-amber-700'
               }`}
             >
-              {parseStatus.includes('успешно') ? (
-                <Check size={13} />
+              {isSuccessStatus ? (
+                <Check size={13} className="shrink-0" />
               ) : (
-                <AlertCircle size={13} />
+                <AlertCircle size={13} className="shrink-0" />
               )}
-              <span>{parseStatus}</span>
+              <span className="line-clamp-1">{parseStatus}</span>
             </p>
           )}
         </div>
@@ -189,16 +191,28 @@ export const AddWishModal: React.FC<AddWishModalProps> = ({ isOpen, onClose }) =
         {/* Title */}
         <div>
           <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1">
-            Название желания
+            Название желания <span className="text-red-500">*</span>
           </label>
           <input
             type="text"
             required
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full px-3.5 py-2.5 rounded-[14px] bg-secondary border border-border text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40"
+            onChange={(e) => {
+              setTitle(e.target.value);
+              if (e.target.value.trim()) setTitleError(false);
+            }}
+            className={`w-full px-3.5 py-2.5 rounded-[14px] bg-secondary border text-sm text-foreground focus:outline-none transition-colors ${
+              titleError
+                ? 'border-red-500 ring-2 ring-red-500/30'
+                : 'border-border focus:ring-2 focus:ring-primary/40'
+            }`}
             placeholder="Например: Уютный вязаный плед"
           />
+          {titleError && (
+            <p className="text-[11px] text-red-500 mt-1 font-medium">
+              Пожалуйста, укажите название желания
+            </p>
+          )}
         </div>
 
         {/* Price and Priority */}
