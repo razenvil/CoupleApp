@@ -8,29 +8,39 @@ const APP_URL = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { action, senderName, itemTitle, recipientChatId, senderChatId, coupleId } = body;
+    const { action, senderName, itemTitle, recipientChatId, senderChatId, senderId, coupleId } = body;
 
     let targetChatId = recipientChatId;
 
     // 1. Try resolving partner from Supabase profiles if possible
     if (!targetChatId && supabase && coupleId) {
       try {
-        let query = supabase
+        const { data: coupleProfiles } = await supabase
           .from('profiles')
-          .select('telegram_id, name')
-          .eq('couple_id', coupleId)
-          .not('telegram_id', 'is', null);
+          .select('id, name, telegram_id')
+          .eq('couple_id', coupleId);
 
-        if (senderChatId) {
-          query = query.neq('telegram_id', Number(senderChatId));
-        } else if (senderName) {
-          query = query.neq('name', senderName);
-        }
+        if (coupleProfiles && coupleProfiles.length > 0) {
+          // Find partner: profile with telegram_id that is NOT the sender
+          const partnerProfile = coupleProfiles.find((p: any) => {
+            if (!p.telegram_id) return false;
+            if (senderId && String(p.id) === String(senderId)) return false;
+            if (senderChatId && Number(p.telegram_id) === Number(senderChatId)) return false;
+            if (senderName && p.name && p.name.trim().toLowerCase() === senderName.trim().toLowerCase()) return false;
+            return true;
+          });
 
-        const { data: partnerProfiles } = await query;
-
-        if (partnerProfiles && partnerProfiles.length > 0) {
-          targetChatId = partnerProfiles[0].telegram_id;
+          if (partnerProfile?.telegram_id) {
+            targetChatId = partnerProfile.telegram_id;
+          } else if (coupleProfiles.length >= 2) {
+            // Fallback: in a couple of 2, if one has telegram_id and is not senderChatId
+            const other = coupleProfiles.find((p: any) => 
+              p.telegram_id && (!senderChatId || Number(p.telegram_id) !== Number(senderChatId))
+            );
+            if (other?.telegram_id) {
+              targetChatId = other.telegram_id;
+            }
+          }
         }
       } catch (dbErr) {
         console.warn('[Notify Route] Supabase partner lookup error:', dbErr);
@@ -105,8 +115,11 @@ export async function POST(req: NextRequest) {
           // 1. From in-memory map
           const inMem = globalPushSubscriptions.get(coupleId) || [];
           for (const item of inMem) {
-            // Do not push back to sender if senderChatId/userId matches
-            if (String(item.userId) !== String(senderChatId)) {
+            // Do not push back to sender if senderChatId/userId/senderId matches
+            const isSender =
+              (senderChatId && String(item.userId) === String(senderChatId)) ||
+              (senderId && String(item.userId) === String(senderId));
+            if (!isSender) {
               await sendWebPush(item.subscription, {
                 title: pushTitle,
                 body: pushBody,
@@ -124,7 +137,10 @@ export async function POST(req: NextRequest) {
 
             if (dbSubs && dbSubs.length > 0) {
               for (const row of dbSubs) {
-                if (String(row.user_id) !== String(senderChatId)) {
+                const isSender =
+                  (senderChatId && String(row.user_id) === String(senderChatId)) ||
+                  (senderId && String(row.user_id) === String(senderId));
+                if (!isSender) {
                   await sendWebPush(row.subscription, {
                     title: pushTitle,
                     body: pushBody,

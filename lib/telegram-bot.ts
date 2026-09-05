@@ -4,6 +4,7 @@
 
 export interface NotificationPayload {
   coupleId?: string;
+  senderId?: string;
   recipientChatId?: number | string;
   senderChatId?: number | string;
   senderName: string;
@@ -25,6 +26,12 @@ export async function sendPartnerNotification(payload: NotificationPayload) {
     // If senderChatId not provided, grab it from Telegram WebApp
     if (!payload.senderChatId && typeof window !== 'undefined' && window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
       payload.senderChatId = window.Telegram.WebApp.initDataUnsafe.user.id;
+    }
+
+    // If senderId not provided, try reading from localStorage
+    if (!payload.senderId && typeof window !== 'undefined') {
+      const savedUser = localStorage.getItem('couple_app_current_user');
+      if (savedUser) payload.senderId = savedUser;
     }
 
     await fetch('/api/telegram/notify', {

@@ -1086,6 +1086,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
 
     sendPartnerNotification({
       coupleId: couple.id,
+      senderId: currentUser.id,
       senderName: currentUser.name,
       action: 'wish_added',
       itemTitle: newItem.title,
@@ -1159,6 +1160,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       type: 'CREATE_TASK',
       payload: newTask,
       coupleId: couple.id,
+      senderId: currentUser.id,
       senderName: currentUser.name,
     });
   };
@@ -1172,6 +1174,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       type: 'UPDATE_TASK',
       payload: { id, data },
       coupleId: couple.id,
+      senderId: currentUser.id,
       senderName: currentUser.name,
     });
   };
@@ -1199,6 +1202,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       type: 'TOGGLE_TASK',
       payload: { id, completed: isNowCompleted, title: toggledTitle },
       coupleId: couple.id,
+      senderId: currentUser.id,
       senderName: currentUser.name,
     });
   };
@@ -1230,6 +1234,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       type: 'TOGGLE_SUBTASK',
       payload: { taskId, subtasks: updatedSubtasks, allCompleted },
       coupleId: couple.id,
+      senderId: currentUser.id,
       senderName: currentUser.name,
     });
   };
@@ -1241,6 +1246,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       type: 'DELETE_TASK',
       payload: { id },
       coupleId: couple.id,
+      senderId: currentUser.id,
       senderName: currentUser.name,
     });
   };

@@ -8,6 +8,7 @@ export interface OfflineTaskMutation {
   type: 'CREATE_TASK' | 'UPDATE_TASK' | 'TOGGLE_TASK' | 'TOGGLE_SUBTASK' | 'DELETE_TASK';
   payload: any;
   coupleId: string;
+  senderId?: string;
   senderName: string;
   createdAt: number;
 }
@@ -70,7 +71,7 @@ export async function processTaskQueue(): Promise<void> {
   window.dispatchEvent(new CustomEvent('couple_sync_status_changed', { detail: { isSyncing: true } }));
 
   try {
-    const remainingQueue: OfflineTaskMutation[] = [];
+    const processedIds = new Set<string>();
 
     for (const item of queue) {
       try {
@@ -99,6 +100,7 @@ export async function processTaskQueue(): Promise<void> {
               success = true;
               sendPartnerNotification({
                 coupleId: item.coupleId,
+                senderId: item.senderId,
                 senderName: item.senderName,
                 action: 'task_created',
                 itemTitle: task.title,
@@ -124,6 +126,7 @@ export async function processTaskQueue(): Promise<void> {
               if (data.title) {
                 sendPartnerNotification({
                   coupleId: item.coupleId,
+                  senderId: item.senderId,
                   senderName: item.senderName,
                   action: 'task_updated',
                   itemTitle: data.title,
@@ -141,6 +144,7 @@ export async function processTaskQueue(): Promise<void> {
               if (completed) {
                 sendPartnerNotification({
                   coupleId: item.coupleId,
+                  senderId: item.senderId,
                   senderName: item.senderName,
                   action: 'task_completed',
                   itemTitle: title || 'Задача выполнена',
@@ -172,24 +176,31 @@ export async function processTaskQueue(): Promise<void> {
           }
         }
 
-        if (!success) {
-          // Keep for next retry
-          remainingQueue.push(item);
+        if (success) {
+          processedIds.add(item.id);
         }
       } catch (mutationErr) {
         console.warn('Error processing task mutation:', mutationErr);
-        remainingQueue.push(item);
       }
     }
 
-    savePendingTaskMutations(remainingQueue);
+    // Safely remove only successfully processed mutations from current storage
+    const currentQueue = getPendingTaskMutations();
+    const updatedQueue = currentQueue.filter((item) => !processedIds.has(item.id));
+    savePendingTaskMutations(updatedQueue);
   } finally {
     isProcessingQueue = false;
+    const remaining = getPendingTaskMutations().length;
     window.dispatchEvent(
       new CustomEvent('couple_sync_status_changed', {
-        detail: { isSyncing: false, remaining: getPendingTaskMutations().length },
+        detail: { isSyncing: false, remaining },
       })
     );
+
+    // If more tasks were enqueued during processing, run another pass
+    if (remaining > 0 && navigator.onLine) {
+      setTimeout(() => processTaskQueue(), 50);
+    }
   }
 }
 
