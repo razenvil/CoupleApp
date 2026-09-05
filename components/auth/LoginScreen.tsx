@@ -8,7 +8,7 @@ import { PRESET_AVATARS } from '@/lib/avatars';
 import { haptic } from '@/lib/telegram';
 
 export const LoginScreen: React.FC = () => {
-  const { loginWithCoupleCode, loginAsNewCouple } = useAppStore();
+  const { loginWithCoupleCode, loginAsNewCouple, botUsername } = useAppStore();
   const [tab, setTab] = useState<'join' | 'create' | 'telegram'>('join');
 
   // Form states
@@ -43,31 +43,44 @@ export const LoginScreen: React.FC = () => {
       }
     }
 
-    // 2. Check Telegram WebApp user & start_param
-    if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
-      try {
-        window.Telegram.WebApp.ready?.();
-        window.Telegram.WebApp.expand?.();
-      } catch {}
+    // 2. Robust check for Telegram WebApp user (runs immediately and with retries for late script execution)
+    const detectTgUser = () => {
+      if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+        try {
+          window.Telegram.WebApp.ready?.();
+          window.Telegram.WebApp.expand?.();
+        } catch {}
 
-      const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
-      const startParam = window.Telegram.WebApp.initDataUnsafe?.start_param;
+        const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
+        const startParam = window.Telegram.WebApp.initDataUnsafe?.start_param;
 
-      if (tgUser?.first_name) {
-        const fullName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ');
-        setName((prev) => prev || fullName);
-      }
+        if (tgUser?.first_name) {
+          const fullName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ');
+          setName((prev) => prev || fullName);
+        }
 
-      if (startParam) {
-        let clean = startParam.trim().toUpperCase();
-        if (clean.startsWith('CP_')) clean = clean.replace('CP_', 'CP-');
-        if (clean.startsWith('CP') && !clean.startsWith('CP-')) clean = `CP-${clean.slice(2)}`;
-        if (clean.startsWith('CP-')) {
-          setCode(clean);
-          setTab('join');
+        if (startParam) {
+          let clean = startParam.trim().toUpperCase();
+          if (clean.startsWith('CP_')) clean = clean.replace('CP_', 'CP-');
+          if (clean.startsWith('CP') && !clean.startsWith('CP-')) clean = `CP-${clean.slice(2)}`;
+          if (clean.startsWith('CP-')) {
+            setCode(clean);
+            setTab('join');
+          }
         }
       }
-    }
+    };
+
+    detectTgUser();
+    const t1 = setTimeout(detectTgUser, 150);
+    const t2 = setTimeout(detectTgUser, 500);
+    const t3 = setTimeout(detectTgUser, 1200);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
   }, []);
 
   const handleJoin = async (e: React.FormEvent) => {
@@ -199,6 +212,25 @@ export const LoginScreen: React.FC = () => {
             onSubmit={handleJoin}
             className="ios-card p-6 border border-border shadow-ios space-y-4"
           >
+            {/* Quick 1-tap Telegram Bot Option */}
+            {botUsername && (
+              <a
+                href={`https://t.me/${botUsername}?start=${code || 'join'}`}
+                className="w-full py-3 px-3 rounded-2xl bg-[#2AABEE]/10 border border-[#2AABEE]/30 text-[#2AABEE] hover:bg-[#2AABEE]/20 transition-all flex items-center justify-center space-x-2 text-xs font-bold ios-press block text-center"
+              >
+                <Send size={15} className="inline mr-1 -mt-0.5" />
+                <span>Войти через Telegram-бота (в 1 клик)</span>
+              </a>
+            )}
+
+            {code && (
+              <div className="p-3 rounded-2xl bg-primary/10 border border-primary/20 text-center">
+                <span className="text-xs font-bold text-primary">
+                  ❤️ Вы приглашены в пару {code}
+                </span>
+              </div>
+            )}
+
             <div>
               <label className="block text-xs font-semibold text-muted-foreground mb-1">
                 Код пары от половинки

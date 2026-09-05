@@ -83,6 +83,9 @@ interface AppContextType {
   toggleTask: (id: string) => void;
   toggleSubtask: (taskId: string, subtaskId: string) => void;
   deleteTask: (id: string) => void;
+
+  // Bot Info
+  botUsername: string;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -129,6 +132,9 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [botUsername, setBotUsername] = useState<string>(
+    process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || ''
+  );
 
   // Fetch data belonging specifically to the active couple
   const loadCoupleData = useCallback(async (coupleId: string, currentId: string) => {
@@ -353,6 +359,14 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       if (savedSizes) {
         try { setSizes(JSON.parse(savedSizes)); } catch (e) {}
       }
+
+      // Fetch dynamic bot username from server API
+      fetch('/api/telegram/bot-info')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data?.username) setBotUsername(data.username);
+        })
+        .catch(() => {});
 
       // Read Cookie (For PWA Home Screen Sync)
       if (typeof document !== 'undefined') {
@@ -1184,6 +1198,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         toggleTask,
         toggleSubtask,
         deleteTask,
+        botUsername,
       }}
     >
       {children}

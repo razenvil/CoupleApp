@@ -9,6 +9,7 @@ export const CoupleSettings: React.FC = () => {
   const {
     couple,
     currentUser,
+    botUsername,
     updateCoupleInfo,
     updateUserProfile,
     lockDocuments,
@@ -23,7 +24,9 @@ export const CoupleSettings: React.FC = () => {
   const [startDate, setStartDate] = useState(couple?.startDate ? couple.startDate.split('T')[0] : '');
 
   const inviteCode = couple?.inviteCode || couple?.id || '';
-  const inviteLink = `https://t.me/our_couple_bot?start=${inviteCode}`;
+  const inviteLink = botUsername
+    ? `https://t.me/${botUsername}?start=${inviteCode}`
+    : `https://t.me/our_couple_bot?start=${inviteCode}`;
 
   const copyText = async (text: string) => {
     try {

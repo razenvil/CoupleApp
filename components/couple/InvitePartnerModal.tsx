@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Share2, Copy, Check, Sparkles, UserPlus, Heart, AlertCircle, Loader2 } from 'lucide-react';
+import { X, Share2, Copy, Check, Sparkles, UserPlus, Heart, AlertCircle, Loader2, Send } from 'lucide-react';
 import { useAppStore } from '@/lib/store/app-store';
 import { haptic } from '@/lib/telegram';
 
@@ -12,10 +12,11 @@ interface InvitePartnerModalProps {
 }
 
 export const InvitePartnerModal: React.FC<InvitePartnerModalProps> = ({ isOpen, onClose }) => {
-  const { couple, joinCoupleByCode } = useAppStore();
+  const { couple, joinCoupleByCode, botUsername } = useAppStore();
   const [activeMode, setActiveMode] = useState<'invite' | 'join'>('invite');
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedBotLink, setCopiedBotLink] = useState(false);
   const [inputCode, setInputCode] = useState('');
   const [isJoining, setIsJoining] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
@@ -57,13 +58,28 @@ export const InvitePartnerModal: React.FC<InvitePartnerModalProps> = ({ isOpen, 
     setTimeout(() => setCopiedCode(false), 2000);
   };
 
-  const getInviteUrl = () => {
+  const getTelegramBotInviteUrl = () => {
+    if (botUsername) {
+      return `https://t.me/${botUsername}?start=${inviteCode}`;
+    }
+    return '';
+  };
+
+  const getWebInviteUrl = () => {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://couple-app-phi-ruddy.vercel.app';
     return `${origin}/?couple=${inviteCode}`;
   };
 
+  const handleCopyBotLink = async () => {
+    const url = getTelegramBotInviteUrl() || getWebInviteUrl();
+    await copyTextToClipboard(url);
+    haptic.success();
+    setCopiedBotLink(true);
+    setTimeout(() => setCopiedBotLink(false), 2000);
+  };
+
   const handleCopyLink = async () => {
-    const url = getInviteUrl();
+    const url = getWebInviteUrl();
     await copyTextToClipboard(url);
     haptic.success();
     setCopiedLink(true);
@@ -72,21 +88,27 @@ export const InvitePartnerModal: React.FC<InvitePartnerModalProps> = ({ isOpen, 
 
   const handleShareLink = async () => {
     haptic.light();
-    const inviteUrl = getInviteUrl();
-    const shareText = `Любимая, заходи в наше приложение «Мы Вместе» ❤️\n\nСсылка для входа: ${inviteUrl}\nКод нашей пары: ${inviteCode}`;
+    const botUrl = getTelegramBotInviteUrl();
+    const webUrl = getWebInviteUrl();
+    const primaryUrl = botUrl || webUrl;
+
+    const shareText = botUrl
+      ? `Любимая, заходи в наше приложение «Мы Вместе» ❤️\n\nВход в 1 клик через Telegram-бота: ${botUrl}\n\nКод нашей пары: ${inviteCode}`
+      : `Любимая, заходи в наше приложение «Мы Вместе» ❤️\n\nСсылка для входа: ${webUrl}\n\nКод нашей пары: ${inviteCode}`;
+
     if (typeof navigator !== 'undefined' && navigator.share) {
       try {
         await navigator.share({
-          title: 'Приложение для нашей пары',
+          title: 'Приложение для нашей пары «Мы Вместе»',
           text: shareText,
-          url: inviteUrl,
+          url: primaryUrl,
         });
         return;
       } catch {}
     }
     await copyTextToClipboard(shareText);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2000);
+    setCopiedBotLink(true);
+    setTimeout(() => setCopiedBotLink(false), 2000);
   };
 
   const handleJoinSubmit = async (e: React.FormEvent) => {
@@ -209,11 +231,26 @@ export const InvitePartnerModal: React.FC<InvitePartnerModalProps> = ({ isOpen, 
                 <button
                   type="button"
                   onClick={handleShareLink}
-                  className="w-full py-3 px-4 rounded-2xl font-bold text-xs shadow-md transition-all ios-press flex items-center justify-center space-x-2 bg-primary text-primary-foreground hover:opacity-95"
+                  className="w-full py-3.5 px-4 rounded-2xl font-bold text-xs shadow-md transition-all ios-press flex items-center justify-center space-x-2 bg-[#2AABEE] text-white hover:opacity-95"
                 >
-                  <Share2 size={16} />
-                  <span>Отправить ссылку половинке</span>
+                  <Send size={16} />
+                  <span>Отправить ссылку на бота</span>
                 </button>
+
+                {botUsername && (
+                  <button
+                    type="button"
+                    onClick={handleCopyBotLink}
+                    className={`w-full py-2.5 px-4 rounded-2xl font-semibold text-xs transition-all ios-press flex items-center justify-center space-x-1.5 ${
+                      copiedBotLink
+                        ? 'bg-emerald-500 text-white'
+                        : 'text-foreground bg-secondary/80 hover:bg-secondary'
+                    }`}
+                  >
+                    {copiedBotLink ? <Check size={15} /> : <Copy size={15} />}
+                    <span>{copiedBotLink ? 'Ссылка на бота скопирована!' : 'Скопировать ссылку бота (t.me)'}</span>
+                  </button>
+                )}
 
                 <button
                   type="button"
@@ -221,11 +258,11 @@ export const InvitePartnerModal: React.FC<InvitePartnerModalProps> = ({ isOpen, 
                   className={`w-full py-2.5 px-4 rounded-2xl font-semibold text-xs transition-all ios-press flex items-center justify-center space-x-1.5 ${
                     copiedLink
                       ? 'bg-emerald-500 text-white'
-                      : 'text-foreground bg-secondary/80 hover:bg-secondary'
+                      : 'text-muted-foreground hover:text-foreground bg-secondary/40 hover:bg-secondary'
                   }`}
                 >
-                  {copiedLink ? <Check size={15} /> : <Copy size={15} />}
-                  <span>{copiedLink ? 'Ссылка скопирована!' : 'Скопировать ссылку для входа'}</span>
+                  {copiedLink ? <Check size={14} /> : <Copy size={14} />}
+                  <span>{copiedLink ? 'Веб-ссылка скопирована!' : 'Скопировать веб-ссылку (PWA)'}</span>
                 </button>
 
                 <button
@@ -234,10 +271,10 @@ export const InvitePartnerModal: React.FC<InvitePartnerModalProps> = ({ isOpen, 
                   className={`w-full py-2.5 px-4 rounded-2xl font-semibold text-xs transition-all ios-press flex items-center justify-center space-x-1.5 ${
                     copiedCode
                       ? 'bg-emerald-500 text-white'
-                      : 'text-muted-foreground hover:text-foreground bg-secondary/40 hover:bg-secondary'
+                      : 'text-muted-foreground hover:text-foreground bg-secondary/20 hover:bg-secondary'
                   }`}
                 >
-                  {copiedCode ? <Check size={15} /> : <Copy size={15} />}
+                  {copiedCode ? <Check size={14} /> : <Copy size={14} />}
                   <span>{copiedCode ? 'Код скопирован!' : `Скопировать только код (${inviteCode})`}</span>
                 </button>
               </div>
