@@ -31,6 +31,7 @@ export async function sendPartnerNotification(payload: NotificationPayload) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      keepalive: true,
     });
   } catch (err) {
     // Non-blocking: fail silently on client side so UI is not interrupted

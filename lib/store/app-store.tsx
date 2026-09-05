@@ -187,7 +187,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       if (coupleRow) {
         setCouple((prev) => ({
           ...prev,
-          anniversaryTitle: coupleRow.name || prev.anniversaryTitle,
+          startDate: coupleRow.start_date || prev.startDate,
+          anniversaryTitle: coupleRow.anniversary_title || coupleRow.name || prev.anniversaryTitle,
           vaultPin: coupleRow.vault_pin || prev.vaultPin || '1234',
           isVaultLocked: coupleRow.is_vault_locked !== undefined ? Boolean(coupleRow.is_vault_locked) : true,
         }));
@@ -580,6 +581,69 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
     }
   }, [loadCoupleData]);
 
+  // Realtime Supabase Subscription & Visibility Sync for cross-device updates
+  useEffect(() => {
+    if (!supabase || !isLoaded || !isAuthenticated || !couple.id || !couple.id.startsWith('CP-')) return;
+
+    let debounceTimer: NodeJS.Timeout;
+    const triggerReload = () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        loadCoupleData(couple.id, currentUserId);
+      }, 300);
+    };
+
+    const channel = supabase.channel(`couple_sync_${couple.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tasks', filter: `couple_id=eq.${couple.id}` },
+        () => triggerReload()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'wishlist_items', filter: `couple_id=eq.${couple.id}` },
+        () => triggerReload()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'couples', filter: `id=eq.${couple.id}` },
+        () => triggerReload()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'documents', filter: `couple_id=eq.${couple.id}` },
+        () => triggerReload()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'profiles', filter: `couple_id=eq.${couple.id}` },
+        () => triggerReload()
+      )
+      .subscribe();
+
+    const handleVisibility = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        triggerReload();
+      }
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibility);
+      window.addEventListener('focus', handleVisibility);
+    }
+
+    return () => {
+      clearTimeout(debounceTimer);
+      if (supabase) {
+        supabase.removeChannel(channel);
+      }
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibility);
+        window.removeEventListener('focus', handleVisibility);
+      }
+    };
+  }, [isLoaded, isAuthenticated, couple.id, currentUserId, loadCoupleData]);
+
   // Sync theme and dark mode to document DOM
   useEffect(() => {
     if (typeof document === 'undefined') return;
@@ -631,6 +695,18 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
 
   const updateCoupleInfo = (data: Partial<CoupleInfo>) => {
     setCouple((prev) => ({ ...prev, ...data }));
+
+    if (supabase && couple.id) {
+      const updateData: any = {};
+      if (data.startDate !== undefined) updateData.start_date = data.startDate;
+      if (data.anniversaryTitle !== undefined) {
+        updateData.anniversary_title = data.anniversaryTitle;
+        updateData.name = data.anniversaryTitle;
+      }
+      if (Object.keys(updateData).length > 0) {
+        supabase.from('couples').update(updateData).eq('id', couple.id).then();
+      }
+    }
   };
 
   const updateUserProfile = (userId: string, data: Partial<UserProfile>) => {
@@ -642,6 +718,15 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       }
       return prev;
     });
+
+    if (supabase && userId) {
+      const updates: any = {};
+      if (data.name !== undefined) updates.name = data.name;
+      if (data.avatar !== undefined) updates.avatar = data.avatar;
+      if (Object.keys(updates).length > 0) {
+        supabase.from('profiles').update(updates).eq('id', userId).then();
+      }
+    }
   };
 
   // Join couple by code

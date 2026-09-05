@@ -13,22 +13,24 @@ export async function POST(req: NextRequest) {
     let targetChatId = recipientChatId;
 
     // 1. Try resolving partner from Supabase profiles if possible
-    if (!targetChatId && supabase && senderChatId) {
+    if (!targetChatId && supabase && coupleId) {
       try {
         let query = supabase
           .from('profiles')
-          .select('telegram_id')
-          .neq('telegram_id', Number(senderChatId))
+          .select('telegram_id, name')
+          .eq('couple_id', coupleId)
           .not('telegram_id', 'is', null);
 
-        if (coupleId) {
-          query = query.eq('couple_id', coupleId);
+        if (senderChatId) {
+          query = query.neq('telegram_id', Number(senderChatId));
+        } else if (senderName) {
+          query = query.neq('name', senderName);
         }
 
-        const { data: partnerProfile } = await query.limit(1).maybeSingle();
+        const { data: partnerProfiles } = await query;
 
-        if (partnerProfile?.telegram_id) {
-          targetChatId = partnerProfile.telegram_id;
+        if (partnerProfiles && partnerProfiles.length > 0) {
+          targetChatId = partnerProfiles[0].telegram_id;
         }
       } catch (dbErr) {
         console.warn('[Notify Route] Supabase partner lookup error:', dbErr);
