@@ -18,27 +18,45 @@ export const CoupleSettings: React.FC = () => {
 
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedPwa, setCopiedPwa] = useState(false);
-  const [partnerAName, setPartnerAName] = useState(couple.partnerA.name);
-  const [partnerBName, setPartnerBName] = useState(couple.partnerB.name);
-  const [startDate, setStartDate] = useState(couple.startDate.split('T')[0]);
+  const [partnerAName, setPartnerAName] = useState(couple?.partnerA?.name || '');
+  const [partnerBName, setPartnerBName] = useState(couple?.partnerB?.name || '');
+  const [startDate, setStartDate] = useState(couple?.startDate ? couple.startDate.split('T')[0] : '');
 
-  const inviteLink = `https://t.me/our_couple_bot?start=${couple.inviteCode}`;
+  const inviteCode = couple?.inviteCode || couple?.id || '';
+  const inviteLink = `https://t.me/our_couple_bot?start=${inviteCode}`;
 
-  const handleCopyInvite = () => {
-    navigator.clipboard.writeText(inviteLink);
+  const copyText = async (text: string) => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+    } catch {}
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    } catch {}
+  };
+
+  const handleCopyInvite = async () => {
+    await copyText(inviteLink);
     setCopiedLink(true);
     haptic.success();
     setTimeout(() => setCopiedLink(false), 2000);
   };
 
-  const handleCopyPwaLink = () => {
+  const handleCopyPwaLink = async () => {
     if (typeof window === 'undefined') return;
     const origin = window.location.origin;
     const pwaUrl = `${origin}/?auth_id=${encodeURIComponent(currentUser.id)}&name=${encodeURIComponent(
       currentUser.name
-    )}&couple=${encodeURIComponent(couple.id)}&avatar=${encodeURIComponent(currentUser.avatar)}`;
+    )}&couple=${encodeURIComponent(inviteCode)}&avatar=${encodeURIComponent(currentUser.avatar)}`;
 
-    navigator.clipboard.writeText(pwaUrl);
+    await copyText(pwaUrl);
     setCopiedPwa(true);
     haptic.success();
     setTimeout(() => setCopiedPwa(false), 2500);

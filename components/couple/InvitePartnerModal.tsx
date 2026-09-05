@@ -15,6 +15,7 @@ export const InvitePartnerModal: React.FC<InvitePartnerModalProps> = ({ isOpen, 
   const { couple, joinCoupleByCode } = useAppStore();
   const [activeMode, setActiveMode] = useState<'invite' | 'join'>('invite');
   const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [inputCode, setInputCode] = useState('');
   const [isJoining, setIsJoining] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
@@ -22,43 +23,70 @@ export const InvitePartnerModal: React.FC<InvitePartnerModalProps> = ({ isOpen, 
 
   if (!isOpen) return null;
 
-  const handleCopyCode = () => {
-    navigator.clipboard.writeText(couple.inviteCode);
+  const inviteCode = couple?.inviteCode || couple?.id || '';
+
+  const copyTextToClipboard = async (text: string): Promise<boolean> => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch {}
+
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.opacity = '0';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      return successful;
+    } catch {
+      return false;
+    }
+  };
+
+  const handleCopyCode = async () => {
+    if (!inviteCode) return;
+    await copyTextToClipboard(inviteCode);
     haptic.success();
     setCopiedCode(true);
     setTimeout(() => setCopiedCode(false), 2000);
   };
 
-  const [copiedLink, setCopiedLink] = useState(false);
-
   const getInviteUrl = () => {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://couple-app-phi-ruddy.vercel.app';
-    return `${origin}/?couple=${couple.inviteCode}`;
+    return `${origin}/?couple=${inviteCode}`;
   };
 
-  const handleCopyLink = () => {
+  const handleCopyLink = async () => {
     const url = getInviteUrl();
-    navigator.clipboard.writeText(url);
+    await copyTextToClipboard(url);
     haptic.success();
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
   };
 
-  const handleShareLink = () => {
+  const handleShareLink = async () => {
     haptic.light();
     const inviteUrl = getInviteUrl();
-    const shareText = `Любимая, заходи в наше приложение «Мы Вместе» ❤️\n\nСсылка для входа: ${inviteUrl}\nКод нашей пары: ${couple.inviteCode}`;
-    if (navigator.share) {
-      navigator.share({
-        title: 'Приложение для нашей пары',
-        text: shareText,
-        url: inviteUrl,
-      }).catch(() => {});
-    } else {
-      navigator.clipboard.writeText(shareText);
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2000);
+    const shareText = `Любимая, заходи в наше приложение «Мы Вместе» ❤️\n\nСсылка для входа: ${inviteUrl}\nКод нашей пары: ${inviteCode}`;
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Приложение для нашей пары',
+          text: shareText,
+          url: inviteUrl,
+        });
+        return;
+      } catch {}
     }
+    await copyTextToClipboard(shareText);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
   };
 
   const handleJoinSubmit = async (e: React.FormEvent) => {
@@ -66,7 +94,7 @@ export const InvitePartnerModal: React.FC<InvitePartnerModalProps> = ({ isOpen, 
     const cleanCode = inputCode.trim().toUpperCase();
     if (!cleanCode) return;
 
-    if (cleanCode === couple.inviteCode) {
+    if (cleanCode === inviteCode) {
       setJoinError('Вы ввели свой собственный код пары. Введите код вашей второй половинки!');
       haptic.warning();
       return;
@@ -172,7 +200,7 @@ export const InvitePartnerModal: React.FC<InvitePartnerModalProps> = ({ isOpen, 
                   Уникальный код вашей пары
                 </span>
                 <span className="font-mono text-3xl font-black text-primary tracking-widest block">
-                  {couple.inviteCode}
+                  {inviteCode}
                 </span>
               </div>
 
@@ -210,7 +238,7 @@ export const InvitePartnerModal: React.FC<InvitePartnerModalProps> = ({ isOpen, 
                   }`}
                 >
                   {copiedCode ? <Check size={15} /> : <Copy size={15} />}
-                  <span>{copiedCode ? 'Код скопирован!' : `Скопировать только код (${couple.inviteCode})`}</span>
+                  <span>{copiedCode ? 'Код скопирован!' : `Скопировать только код (${inviteCode})`}</span>
                 </button>
               </div>
             </>
