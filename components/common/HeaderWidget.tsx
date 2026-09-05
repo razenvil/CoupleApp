@@ -17,7 +17,8 @@ export const HeaderWidget: React.FC<HeaderWidgetProps> = ({ onOpenPwa }) => {
   const isPwa = isStandalonePwa();
   const showPwaButton = onOpenPwa && isTg && !isPwa;
 
-  const start = new Date(couple.startDate);
+  const parsedStart = couple?.startDate ? new Date(couple.startDate) : new Date();
+  const start = isNaN(parsedStart.getTime()) ? new Date() : parsedStart;
   const now = new Date();
   const diffTime = Math.abs(now.getTime() - start.getTime());
   const daysTogether = Math.floor(diffTime / (1000 * 60 * 60 * 24));
@@ -35,7 +36,7 @@ export const HeaderWidget: React.FC<HeaderWidgetProps> = ({ onOpenPwa }) => {
 
   const handleSwitchUser = () => {
     haptic.medium();
-    switchUser(partnerUser.id);
+    if (partnerUser?.id) switchUser(partnerUser.id);
   };
 
   const formattedDate = start.toLocaleDateString('ru-RU', {
@@ -43,6 +44,13 @@ export const HeaderWidget: React.FC<HeaderWidgetProps> = ({ onOpenPwa }) => {
     month: 'long',
     year: 'numeric',
   });
+
+  const currentUserName = currentUser?.name || 'Пользователь';
+  const currentUserAvatar = currentUser?.avatar || 'memoji_1';
+  const partnerAName = couple?.partnerA?.name || 'Партнер 1';
+  const partnerAAvatar = couple?.partnerA?.avatar || 'memoji_1';
+  const partnerBName = couple?.partnerB?.name || 'Партнер 2';
+  const partnerBAvatar = couple?.partnerB?.avatar || 'memoji_2';
 
   return (
     <header className="px-5 pt-safe pt-2 pb-1 max-w-md mx-auto">
@@ -72,11 +80,11 @@ export const HeaderWidget: React.FC<HeaderWidgetProps> = ({ onOpenPwa }) => {
               )}
 
               <div className="flex items-center space-x-2 pl-2.5 pr-1.5 py-1 rounded-full bg-secondary/70 border border-border/40 text-xs font-medium text-foreground shadow-xs select-none">
-                <span className="font-bold text-xs">{currentUser.name}</span>
+                <span className="font-bold text-xs">{currentUserName}</span>
                 <div className="w-6 h-6 rounded-full overflow-hidden ring-1 ring-primary/50 bg-secondary shrink-0">
                   <img
-                    src={getAvatarUrl(currentUser.avatar)}
-                    alt={currentUser.name}
+                    src={getAvatarUrl(currentUserAvatar)}
+                    alt={currentUserName}
                     className="w-full h-full object-cover"
                   />
                 </div>
@@ -109,15 +117,15 @@ export const HeaderWidget: React.FC<HeaderWidgetProps> = ({ onOpenPwa }) => {
             <div className="relative flex items-center pr-2 z-10">
               <div className="w-12 h-12 rounded-full overflow-hidden ring-2 ring-background bg-secondary shadow-sm shrink-0">
                 <img
-                  src={getAvatarUrl(couple.partnerA.avatar)}
-                  alt={couple.partnerA.name}
+                  src={getAvatarUrl(partnerAAvatar)}
+                  alt={partnerAName}
                   className="w-full h-full object-cover"
                 />
               </div>
               <div className="w-12 h-12 rounded-full overflow-hidden ring-2 ring-background bg-secondary shadow-sm -ml-4 shrink-0">
                 <img
-                  src={getAvatarUrl(couple.partnerB.avatar)}
-                  alt={couple.partnerB.name}
+                  src={getAvatarUrl(partnerBAvatar)}
+                  alt={partnerBName}
                   className="w-full h-full object-cover"
                 />
               </div>
@@ -144,15 +152,15 @@ export const HeaderWidget: React.FC<HeaderWidgetProps> = ({ onOpenPwa }) => {
             <div className="relative flex items-center">
               <div className="w-6 h-6 rounded-full overflow-hidden ring-1 ring-white/30 bg-zinc-800 shrink-0">
                 <img
-                  src={getAvatarUrl(couple.partnerA.avatar)}
-                  alt={couple.partnerA.name}
+                  src={getAvatarUrl(partnerAAvatar)}
+                  alt={partnerAName}
                   className="w-full h-full object-cover"
                 />
               </div>
               <div className="w-6 h-6 rounded-full overflow-hidden ring-1 ring-white/30 bg-zinc-800 -ml-2 shrink-0">
                 <img
-                  src={getAvatarUrl(couple.partnerB.avatar)}
-                  alt={couple.partnerB.name}
+                  src={getAvatarUrl(partnerBAvatar)}
+                  alt={partnerBName}
                   className="w-full h-full object-cover"
                 />
               </div>
@@ -185,11 +193,11 @@ export const HeaderWidget: React.FC<HeaderWidgetProps> = ({ onOpenPwa }) => {
 
             {/* Current User Authenticated Profile Pill */}
             <div className="flex items-center space-x-2 pl-2.5 pr-1.5 py-1 rounded-full bg-secondary/70 border border-border/40 text-xs font-medium text-foreground shadow-xs select-none">
-              <span className="font-bold text-xs">{currentUser.name}</span>
+              <span className="font-bold text-xs">{currentUserName}</span>
               <div className="w-6 h-6 rounded-full overflow-hidden ring-1 ring-primary/50 bg-secondary shrink-0">
                 <img
-                  src={getAvatarUrl(currentUser.avatar)}
-                  alt={currentUser.name}
+                  src={getAvatarUrl(currentUserAvatar)}
+                  alt={currentUserName}
                   className="w-full h-full object-cover"
                 />
               </div>
