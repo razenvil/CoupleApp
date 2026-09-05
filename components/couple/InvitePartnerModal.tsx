@@ -29,18 +29,35 @@ export const InvitePartnerModal: React.FC<InvitePartnerModalProps> = ({ isOpen, 
     setTimeout(() => setCopiedCode(false), 2000);
   };
 
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const getInviteUrl = () => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://couple-app-phi-ruddy.vercel.app';
+    return `${origin}/?couple=${couple.inviteCode}`;
+  };
+
+  const handleCopyLink = () => {
+    const url = getInviteUrl();
+    navigator.clipboard.writeText(url);
+    haptic.success();
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
+
   const handleShareLink = () => {
     haptic.light();
-    const shareText = `Привет! Заходи в наше общее приложение «Мы Вместе» ❤️ Мой код пары: ${couple.inviteCode}`;
+    const inviteUrl = getInviteUrl();
+    const shareText = `Любимая, заходи в наше приложение «Мы Вместе» ❤️\n\nСсылка для входа: ${inviteUrl}\nКод нашей пары: ${couple.inviteCode}`;
     if (navigator.share) {
       navigator.share({
         title: 'Приложение для нашей пары',
         text: shareText,
+        url: inviteUrl,
       }).catch(() => {});
     } else {
       navigator.clipboard.writeText(shareText);
-      setCopiedCode(true);
-      setTimeout(() => setCopiedCode(false), 2000);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
     }
   };
 
@@ -163,24 +180,37 @@ export const InvitePartnerModal: React.FC<InvitePartnerModalProps> = ({ isOpen, 
               <div className="space-y-2">
                 <button
                   type="button"
-                  onClick={handleCopyCode}
-                  className={`w-full py-3 px-4 rounded-2xl font-bold text-xs shadow-md transition-all ios-press flex items-center justify-center space-x-2 ${
-                    copiedCode
-                      ? 'bg-emerald-500 text-white'
-                      : 'bg-primary text-primary-foreground hover:opacity-95'
-                  }`}
+                  onClick={handleShareLink}
+                  className="w-full py-3 px-4 rounded-2xl font-bold text-xs shadow-md transition-all ios-press flex items-center justify-center space-x-2 bg-primary text-primary-foreground hover:opacity-95"
                 >
-                  {copiedCode ? <Check size={16} /> : <Copy size={16} />}
-                  <span>{copiedCode ? 'Код скопирован!' : 'Скопировать код пары'}</span>
+                  <Share2 size={16} />
+                  <span>Отправить ссылку половинке</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={handleShareLink}
-                  className="w-full py-2.5 px-4 rounded-2xl font-semibold text-xs text-foreground bg-secondary/80 hover:bg-secondary transition-all ios-press flex items-center justify-center space-x-1.5"
+                  onClick={handleCopyLink}
+                  className={`w-full py-2.5 px-4 rounded-2xl font-semibold text-xs transition-all ios-press flex items-center justify-center space-x-1.5 ${
+                    copiedLink
+                      ? 'bg-emerald-500 text-white'
+                      : 'text-foreground bg-secondary/80 hover:bg-secondary'
+                  }`}
                 >
-                  <Share2 size={15} />
-                  <span>Поделиться в Telegram</span>
+                  {copiedLink ? <Check size={15} /> : <Copy size={15} />}
+                  <span>{copiedLink ? 'Ссылка скопирована!' : 'Скопировать ссылку для входа'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleCopyCode}
+                  className={`w-full py-2.5 px-4 rounded-2xl font-semibold text-xs transition-all ios-press flex items-center justify-center space-x-1.5 ${
+                    copiedCode
+                      ? 'bg-emerald-500 text-white'
+                      : 'text-muted-foreground hover:text-foreground bg-secondary/40 hover:bg-secondary'
+                  }`}
+                >
+                  {copiedCode ? <Check size={15} /> : <Copy size={15} />}
+                  <span>{copiedCode ? 'Код скопирован!' : `Скопировать только код (${couple.inviteCode})`}</span>
                 </button>
               </div>
             </>

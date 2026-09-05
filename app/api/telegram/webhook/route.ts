@@ -1,9 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { verifiedUsers, partnerChatLinks } from '@/lib/telegram-bot';
+import { verifiedUsers, partnerChatLinks, pendingInvites } from '@/lib/telegram-bot';
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const APP_URL = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://couple-app-phi-ruddy.vercel.app';
+
+function getWebAppUrl(user: any, coupleCode?: string | null): string {
+  const params = new URLSearchParams();
+  if (user?.id) params.set('auth_id', String(user.id));
+  if (user?.first_name) {
+    const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ');
+    params.set('name', fullName);
+  }
+  if (coupleCode && coupleCode.startsWith('CP-')) {
+    params.set('couple', coupleCode);
+  }
+  const queryString = params.toString();
+  return queryString ? `${APP_URL}/?${queryString}` : APP_URL;
+}
 
 async function sendTelegramMessage(chatId: number | string, text: string, replyMarkup?: any) {
   if (!BOT_TOKEN) {
@@ -47,6 +61,31 @@ export async function POST(req: NextRequest) {
       partnerChatLinks.set(String(fromUser.id), chatId);
     }
 
+    // Parse /start parameter (e.g. /start CP-1234 or /start CP_1234)
+    let startCode: string | null = null;
+    if (text.startsWith('/start')) {
+      const parts = text.split(' ');
+      if (parts.length > 1) {
+        let rawParam = parts[1].trim().toUpperCase();
+        if (rawParam.startsWith('CP_')) {
+          rawParam = rawParam.replace('CP_', 'CP-');
+        } else if (rawParam.startsWith('CP') && !rawParam.startsWith('CP-')) {
+          rawParam = `CP-${rawParam.slice(2)}`;
+        }
+        if (rawParam.startsWith('CP-')) {
+          startCode = rawParam;
+          if (fromUser?.id) pendingInvites.set(String(fromUser.id), rawParam);
+          pendingInvites.set(String(chatId), rawParam);
+        }
+      }
+    }
+
+    const userCoupleCode =
+      startCode ||
+      (fromUser?.id ? pendingInvites.get(String(fromUser.id)) : null) ||
+      pendingInvites.get(String(chatId)) ||
+      null;
+
     // 1. User shared contact (Authorization via phone number)
     if (message.contact) {
       const contact = message.contact;
@@ -73,17 +112,40 @@ export async function POST(req: NextRequest) {
         verifiedAt: new Date().toISOString(),
       });
 
+      // Try to associate with couple in Supabase if code exists
+      if (fromUser?.id && userCoupleCode) {
+        try {
+          const { supabase } = await import('@/lib/supabase');
+          if (supabase) {
+            await supabase.from('profiles').upsert({
+              id: String(fromUser.id),
+              telegram_id: fromUser.id,
+              name: contact.first_name || fromUser.first_name || 'Пользователь',
+              username: fromUser.username || null,
+              couple_id: userCoupleCode,
+              role: 'partner_b',
+            }, { onConflict: 'id' });
+          }
+        } catch (err) {
+          console.warn('Webhook profile upsert error:', err);
+        }
+      }
+
+      const launchUrl = getWebAppUrl(fromUser, userCoupleCode);
+
       // Send success message with WebApp launch button and remove request keyboard
       await sendTelegramMessage(
         chatId,
-        `✅ <b>Вход подтвержден!</b>\n\nНомер <code>${phone}</code> успешно верифицирован.\nТеперь вам открыт доступ к Сейфу документов, Хотелкам и Задачам в приложении пары.`,
+        `✅ <b>Вход подтвержден!</b>\n\nНомер <code>${phone}</code> успешно верифицирован.${
+          userCoupleCode ? `\n❤️ Вы подключаетесь к паре: <b>${userCoupleCode}</b>` : ''
+        }\nТеперь вам открыт доступ к Сейфу документов, Хотелкам и Задачам в приложении пары.`,
         {
           remove_keyboard: true,
           inline_keyboard: [
             [
               {
                 text: '📱 Открыть «Мы Вместе»',
-                web_app: { url: APP_URL },
+                web_app: { url: launchUrl },
               },
             ],
           ],
@@ -98,9 +160,13 @@ export async function POST(req: NextRequest) {
 
       // If not yet verified by phone number -> request contact
       if (!isVerified) {
+        const welcomeInviteText = userCoupleCode
+          ? `❤️ Вас пригласили в общее пространство пары (код <b>${userCoupleCode}</b>).\n\n`
+          : '';
+
         await sendTelegramMessage(
           chatId,
-          `👋 Привет, <b>${fromUser.first_name}</b>!\n\nДобро пожаловать в <b>«Мы Вместе»</b> — приватное пространство для вашей пары.\n\n🔒 <b>Безопасный вход:</b>\nЧтобы никто посторонний не получил доступ к вашим документам и билетам, подтвердите вход через номер телефона:`,
+          `👋 Привет, <b>${fromUser.first_name}</b>!\n\n${welcomeInviteText}Добро пожаловать в <b>«Мы Вместе»</b> — приватное пространство для вашей пары.\n\n🔒 <b>Безопасный вход:</b>\nЧтобы никто посторонний не получил доступ к вашим документам и билетам, подтвердите вход через номер телефона:`,
           {
             keyboard: [
               [
@@ -117,16 +183,19 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
-      // Already verified -> send launch button
+      // Already verified -> send launch button with user details and couple code
+      const launchUrl = getWebAppUrl(fromUser, userCoupleCode);
       await sendTelegramMessage(
         chatId,
-        `❤️ С возвращением, <b>${fromUser.first_name}</b>!\n\nНажмите кнопку ниже, чтобы открыть приложение пары:`,
+        `❤️ С возвращением, <b>${fromUser.first_name}</b>!${
+          userCoupleCode ? `\nКод пары: <b>${userCoupleCode}</b>` : ''
+        }\n\nНажмите кнопку ниже, чтобы открыть приложение пары:`,
         {
           inline_keyboard: [
             [
               {
                 text: '📱 Открыть «Мы Вместе»',
-                web_app: { url: APP_URL },
+                web_app: { url: launchUrl },
               },
             ],
           ],
@@ -151,6 +220,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      const launchUrl = getWebAppUrl(fromUser, userCoupleCode);
       await sendTelegramMessage(
         chatId,
         `🚪 <b>Привязка устройства сброшена!</b>\n\nАктивная сессия PWA успешно завершена. Теперь вы можете войти в приложение с нового телефона без блокировки.`,
@@ -159,7 +229,7 @@ export async function POST(req: NextRequest) {
             [
               {
                 text: '📱 Открыть «Мы Вместе»',
-                web_app: { url: APP_URL },
+                web_app: { url: launchUrl },
               },
             ],
           ],
@@ -169,6 +239,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Default reply for any other text
+    const defaultLaunchUrl = getWebAppUrl(fromUser, userCoupleCode);
     await sendTelegramMessage(
       chatId,
       `❤️ Приложение для вашей пары готово к работе! Нажмите кнопку ниже:`,
@@ -177,7 +248,7 @@ export async function POST(req: NextRequest) {
           [
             {
               text: '📱 Открыть «Мы Вместе»',
-              web_app: { url: APP_URL },
+              web_app: { url: defaultLaunchUrl },
             },
           ],
         ],

@@ -392,15 +392,26 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       // Telegram User detection
       let tgUser = null;
       let startParam = '';
-      if (typeof window !== 'undefined' && window.Telegram?.WebApp?.initDataUnsafe) {
-        tgUser = window.Telegram.WebApp.initDataUnsafe.user;
-        startParam = window.Telegram.WebApp.initDataUnsafe.start_param || '';
+      if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+        try {
+          window.Telegram.WebApp.ready?.();
+          window.Telegram.WebApp.expand?.();
+        } catch {}
+        tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
+        startParam = window.Telegram.WebApp.initDataUnsafe?.start_param || '';
       }
 
+      const incomingCoupleCode =
+        (urlAuthCouple && urlAuthCouple.startsWith('CP-'))
+          ? urlAuthCouple
+          : (startParam && startParam.startsWith('CP-'))
+            ? startParam
+            : null;
+
       if (urlAuthId) {
-        // Authenticated via PWA Link!
+        // Authenticated via PWA / WebApp Link!
         activeId = urlAuthId;
-        const pwaCoupleId = (urlAuthCouple && urlAuthCouple.startsWith('CP-')) ? urlAuthCouple : null;
+        const pwaCoupleId = incomingCoupleCode;
 
         setCurrentUserId(activeId);
         setIsAuthenticated(true);
@@ -430,20 +441,24 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
                 .eq('id', activeId)
                 .maybeSingle();
 
-              let resolvedCoupleId = existingProf?.couple_id;
+              let resolvedCoupleId = pwaCoupleId || existingProf?.couple_id;
               if (!resolvedCoupleId || !resolvedCoupleId.startsWith('CP-')) {
-                resolvedCoupleId = pwaCoupleId || generateCoupleCode();
+                resolvedCoupleId = generateCoupleCode();
                 await supabase.from('couples').upsert({
                   id: resolvedCoupleId,
                   name: 'Наша семья',
                 }, { onConflict: 'id' });
               }
 
+              const role = pwaCoupleId ? 'partner_b' : (existingProf?.role || 'partner_a');
+
               await supabase.from('profiles').upsert({
                 id: activeId,
+                telegram_id: Number(activeId) || undefined,
                 name: urlAuthName || existingProf?.name || 'Пользователь',
                 avatar: urlAuthAvatar || existingProf?.avatar || 'memoji_1',
                 couple_id: resolvedCoupleId,
+                role,
               }, { onConflict: 'id' });
 
               localStorage.setItem(STORAGE_KEYS.COUPLE_ID, resolvedCoupleId);
@@ -477,9 +492,9 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
               const isInvalidCoupleId = (cid?: string | null) =>
                 !cid || cid === 'default_couple' || cid === 'couple_main' || cid === 'LOVE2024' || !cid.startsWith('CP-');
 
-              // If invited via deep link start_param (e.g. start=CP-1234)
-              if (startParam && startParam.startsWith('CP-')) {
-                userCoupleId = startParam;
+              // If invited via deep link start_param or URL query param
+              if (incomingCoupleCode) {
+                userCoupleId = incomingCoupleCode;
               } else if (isInvalidCoupleId(userCoupleId)) {
                 // Discard old default_couple and generate fresh unique couple code!
                 userCoupleId = (activeCode && activeCode.startsWith('CP-')) ? activeCode : generateCoupleCode();
@@ -490,6 +505,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
                 }, { onConflict: 'id' });
               }
 
+              const role = incomingCoupleCode ? 'partner_b' : (existingProfile?.role || 'partner_a');
+
               // Save profile
               await supabase.from('profiles').upsert({
                 id: activeId,
@@ -498,7 +515,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
                 username: tgUser.username || null,
                 avatar,
                 couple_id: userCoupleId,
-                role: existingProfile?.role || 'partner_a',
+                role,
               }, { onConflict: 'id' });
 
               localStorage.setItem(STORAGE_KEYS.COUPLE_ID, userCoupleId);

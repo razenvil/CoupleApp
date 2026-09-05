@@ -12,9 +12,10 @@ export interface NotificationPayload {
   details?: string;
 }
 
-// In-memory registry of verified users and chat links
+// In-memory registry of verified users, chat links, and pending couple invitations
 export const verifiedUsers = new Map<number, { phone: string; name: string; username?: string; verifiedAt: string }>();
 export const partnerChatLinks = new Map<string, number>(); // userId -> chatId
+export const pendingInvites = new Map<string, string>(); // userId or chatId -> coupleCode
 
 /**
  * Sends an asynchronous notification request to our Next.js backend endpoint

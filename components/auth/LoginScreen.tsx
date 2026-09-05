@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Heart, Sparkles, ArrowRight, Loader2, Send } from 'lucide-react';
 import { useAppStore } from '@/lib/store/app-store';
@@ -17,6 +17,58 @@ export const LoginScreen: React.FC = () => {
   const [selectedAvatar, setSelectedAvatar] = useState(PRESET_AVATARS[0].id);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    // 1. Check URL parameters
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlCode = params.get('couple') || params.get('code');
+      const urlName = params.get('name');
+      const urlAvatar = params.get('avatar');
+
+      if (urlCode) {
+        let clean = urlCode.trim().toUpperCase();
+        if (clean.startsWith('CP_')) clean = clean.replace('CP_', 'CP-');
+        if (clean.startsWith('CP') && !clean.startsWith('CP-')) clean = `CP-${clean.slice(2)}`;
+        setCode(clean);
+        setTab('join');
+      }
+
+      if (urlName) {
+        setName(urlName);
+      }
+
+      if (urlAvatar) {
+        setSelectedAvatar(urlAvatar);
+      }
+    }
+
+    // 2. Check Telegram WebApp user & start_param
+    if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
+      try {
+        window.Telegram.WebApp.ready?.();
+        window.Telegram.WebApp.expand?.();
+      } catch {}
+
+      const tgUser = window.Telegram.WebApp.initDataUnsafe?.user;
+      const startParam = window.Telegram.WebApp.initDataUnsafe?.start_param;
+
+      if (tgUser?.first_name) {
+        const fullName = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ');
+        setName((prev) => prev || fullName);
+      }
+
+      if (startParam) {
+        let clean = startParam.trim().toUpperCase();
+        if (clean.startsWith('CP_')) clean = clean.replace('CP_', 'CP-');
+        if (clean.startsWith('CP') && !clean.startsWith('CP-')) clean = `CP-${clean.slice(2)}`;
+        if (clean.startsWith('CP-')) {
+          setCode(clean);
+          setTab('join');
+        }
+      }
+    }
+  }, []);
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();

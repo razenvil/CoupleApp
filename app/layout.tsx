@@ -33,7 +33,7 @@ export default function RootLayout({
   return (
     <html lang="ru" suppressHydrationWarning>
       <head>
-        <script src="https://telegram.org/js/telegram-web-app.js" async></script>
+        <script src="https://telegram.org/js/telegram-web-app.js"></script>
       </head>
       <body className="min-h-screen bg-background text-foreground antialiased selection:bg-primary/20">
         <AppStoreProvider>{children}</AppStoreProvider>
