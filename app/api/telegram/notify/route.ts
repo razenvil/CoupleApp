@@ -82,6 +82,9 @@ export async function POST(req: NextRequest) {
       case 'doc_added':
         text = `${prefix}🛡️ <b>${senderName}</b> сохранил(а) документ:\n«<b>${itemTitle}</b>»`;
         break;
+      case 'grocery_ping':
+        text = `${prefix}🛒 <b>${senderName}</b> сейчас в магазине!\nЗагляни в список покупок, если нужно что-то докупить ✨`;
+        break;
       default:
         text = `${prefix}🔔 Обновление от <b>${senderName}</b>:\n«<b>${itemTitle}</b>»`;
     }
@@ -101,6 +104,10 @@ export async function POST(req: NextRequest) {
         break;
       case 'doc_added':
         pushBody = `🛡️ ${senderName} сохранил(а) документ: «${itemTitle}»`;
+        break;
+      case 'grocery_ping':
+        pushTitle = '🛒 Я в магазине!';
+        pushBody = `${senderName} закупается! Проверь список покупок.`;
         break;
       default:
         pushBody = `🔔 ${senderName}: ${itemTitle}`;

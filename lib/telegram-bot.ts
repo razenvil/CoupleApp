@@ -8,7 +8,7 @@ export interface NotificationPayload {
   recipientChatId?: number | string;
   senderChatId?: number | string;
   senderName: string;
-  action: 'task_created' | 'task_updated' | 'task_completed' | 'wish_added' | 'doc_added' | 'match_date';
+  action: 'task_created' | 'task_updated' | 'task_completed' | 'wish_added' | 'doc_added' | 'match_date' | 'grocery_ping';
   itemTitle: string;
   details?: string;
 }

@@ -88,9 +88,10 @@ export const GroceryModeModal: React.FC<GroceryModeModalProps> = ({ isOpen, onCl
 
     sendPartnerNotification({
       coupleId: couple.id,
+      senderId: currentUser.id,
       senderName: currentUser.name,
-      action: 'task_updated',
-      itemTitle: '🛒 Я в магазине! Проверь список, если нужно что-то докупить.',
+      action: 'grocery_ping',
+      itemTitle: 'Я в магазине!',
     });
 
     setTimeout(() => {
@@ -153,26 +154,31 @@ export const GroceryModeModal: React.FC<GroceryModeModalProps> = ({ isOpen, onCl
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background select-none">
       {/* Top Header Bar */}
-      <div className="pt-3 pb-3 px-5 border-b border-border/80 bg-background/95 backdrop-blur-md flex items-center justify-between">
-        <div className="flex items-center space-x-2.5">
-          <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 border border-emerald-500/20 text-emerald-600 flex items-center justify-center">
+      <div 
+        style={{ paddingTop: 'calc(env(safe-area-inset-top, 24px) + 12px)' }}
+        className="pb-3.5 px-5 border-b border-border/80 bg-background/95 backdrop-blur-md flex items-center justify-between shrink-0"
+      >
+        <div className="flex items-center space-x-3">
+          <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 border border-emerald-500/20 text-emerald-600 flex items-center justify-center shrink-0">
             <ShoppingCart size={22} strokeWidth={2.4} />
           </div>
           <div>
             <h2 className="text-lg font-black tracking-tight text-foreground leading-none">
               Я в магазине
             </h2>
-            <p className="text-xs text-muted-foreground mt-0.5 font-medium">
+            <p className="text-xs text-muted-foreground mt-1 font-medium">
               Режим покупок без спешки
             </p>
           </div>
         </div>
 
         <button
+          type="button"
           onClick={onClose}
-          className="w-8 h-8 rounded-full bg-secondary text-muted-foreground hover:text-foreground flex items-center justify-center ios-press shadow-xs"
+          className="w-10 h-10 -mr-1 rounded-full bg-secondary/90 hover:bg-secondary text-foreground active:scale-95 flex items-center justify-center ios-press shadow-xs shrink-0 cursor-pointer"
+          aria-label="Закрыть режим магазина"
         >
-          <X size={18} />
+          <X size={20} strokeWidth={2.5} />
         </button>
       </div>
 
@@ -332,7 +338,10 @@ export const GroceryModeModal: React.FC<GroceryModeModalProps> = ({ isOpen, onCl
       </div>
 
       {/* Quick Add Product Bar at Bottom */}
-      <div className="p-4 border-t border-border bg-card/90 backdrop-blur-md">
+      <div 
+        style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 20px) + 12px)' }}
+        className="p-4 border-t border-border bg-card/90 backdrop-blur-md shrink-0"
+      >
         <form onSubmit={handleAddItem} className="flex items-center space-x-2">
           <input
             type="text"
