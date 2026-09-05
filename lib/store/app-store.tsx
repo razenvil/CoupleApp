@@ -107,7 +107,53 @@ const STORAGE_KEYS = {
 };
 
 function generateCoupleCode(): string {
-  return `CP-${Math.floor(1000 + Math.random() * 9000)}`;
+  const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+  let part1 = '';
+  let part2 = '';
+  for (let i = 0; i < 4; i++) {
+    part1 += chars.charAt(Math.floor(Math.random() * chars.length));
+    part2 += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `CP-${part1}-${part2}`;
+}
+
+const BRUTEFORCE_KEYS = {
+  ATTEMPTS: 'couple_app_failed_attempts',
+  LOCKOUT_UNTIL: 'couple_app_lockout_until',
+};
+
+function checkBruteforceLockout(): { isLocked: boolean; remainingMinutes: number } {
+  if (typeof window === 'undefined') return { isLocked: false, remainingMinutes: 0 };
+  const lockoutUntil = localStorage.getItem(BRUTEFORCE_KEYS.LOCKOUT_UNTIL);
+  if (lockoutUntil) {
+    const remainingMs = Number(lockoutUntil) - Date.now();
+    if (remainingMs > 0) {
+      return { isLocked: true, remainingMinutes: Math.ceil(remainingMs / 60000) };
+    } else {
+      localStorage.removeItem(BRUTEFORCE_KEYS.LOCKOUT_UNTIL);
+      localStorage.removeItem(BRUTEFORCE_KEYS.ATTEMPTS);
+    }
+  }
+  return { isLocked: false, remainingMinutes: 0 };
+}
+
+function recordFailedAttempt(): { isLocked: boolean; remainingMinutes: number } {
+  if (typeof window === 'undefined') return { isLocked: false, remainingMinutes: 0 };
+  const currentAttempts = Number(localStorage.getItem(BRUTEFORCE_KEYS.ATTEMPTS) || '0') + 1;
+  localStorage.setItem(BRUTEFORCE_KEYS.ATTEMPTS, String(currentAttempts));
+
+  if (currentAttempts >= 5) {
+    const lockUntil = Date.now() + 15 * 60 * 1000; // 15 minutes lockout
+    localStorage.setItem(BRUTEFORCE_KEYS.LOCKOUT_UNTIL, String(lockUntil));
+    return { isLocked: true, remainingMinutes: 15 };
+  }
+  return { isLocked: false, remainingMinutes: 0 };
+}
+
+function clearBruteforceAttempts(): void {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(BRUTEFORCE_KEYS.ATTEMPTS);
+  localStorage.removeItem(BRUTEFORCE_KEYS.LOCKOUT_UNTIL);
 }
 
 function getClientDeviceId(): string {
@@ -826,6 +872,14 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
 
   // Join couple by code
   const joinCoupleByCode = async (code: string) => {
+    const lockout = checkBruteforceLockout();
+    if (lockout.isLocked) {
+      return {
+        success: false,
+        message: `⛔ Слишком много неверных попыток. Ввод заблокирован на ${lockout.remainingMinutes} мин. для защиты данных.`,
+      };
+    }
+
     const cleanCode = code.trim().toUpperCase();
     if (!supabase) return { success: false, message: 'База данных недоступна' };
 
@@ -837,8 +891,17 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         .eq('couple_id', cleanCode);
 
       if (fetchErr || !foundProfiles || foundProfiles.length === 0) {
+        const failed = recordFailedAttempt();
+        if (failed.isLocked) {
+          return {
+            success: false,
+            message: '⛔ 5 неверных попыток. Ввод заблокирован на 15 минут для защиты данных.',
+          };
+        }
         return { success: false, message: 'Пара с таким кодом не найдена. Проверьте код.' };
       }
+
+      clearBruteforceAttempts();
 
       if (foundProfiles.length >= 2) {
         return { success: false, message: 'В этой паре уже состоят 2 человека.' };
@@ -879,6 +942,14 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
 
   // Login with existing couple code (PWA / Browser)
   const loginWithCoupleCode = async (code: string, myName: string, avatar: string = 'memoji_2') => {
+    const lockout = checkBruteforceLockout();
+    if (lockout.isLocked) {
+      return {
+        success: false,
+        message: `⛔ Слишком много неверных попыток. Ввод заблокирован на ${lockout.remainingMinutes} мин. для защиты данных.`,
+      };
+    }
+
     const cleanCode = code.trim().toUpperCase();
     if (!cleanCode) return { success: false, message: 'Введите код пары' };
     if (!myName.trim()) return { success: false, message: 'Введите ваше имя' };
@@ -891,8 +962,17 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         .eq('couple_id', cleanCode);
 
       if (error || !existingProfiles || existingProfiles.length === 0) {
+        const failed = recordFailedAttempt();
+        if (failed.isLocked) {
+          return {
+            success: false,
+            message: '⛔ 5 неверных попыток. Ввод заблокирован на 15 минут для защиты данных.',
+          };
+        }
         return { success: false, message: 'Пара с таким кодом не найдена. Проверьте код.' };
       }
+
+      clearBruteforceAttempts();
 
       const cleanName = myName.trim();
       const currentDeviceId = getClientDeviceId();
