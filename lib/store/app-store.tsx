@@ -627,6 +627,13 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
+    // Background polling reconciliation every 8 seconds while active to guarantee sync
+    const pollInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        loadCoupleData(couple.id, currentUserId);
+      }
+    }, 8000);
+
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', handleVisibility);
       window.addEventListener('focus', handleVisibility);
@@ -634,6 +641,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       clearTimeout(debounceTimer);
+      clearInterval(pollInterval);
       if (supabase) {
         supabase.removeChannel(channel);
       }
@@ -696,15 +704,52 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const updateCoupleInfo = (data: Partial<CoupleInfo>) => {
     setCouple((prev) => ({ ...prev, ...data }));
 
-    if (supabase && couple.id) {
-      const updateData: any = {};
-      if (data.startDate !== undefined) updateData.start_date = data.startDate;
-      if (data.anniversaryTitle !== undefined) {
-        updateData.anniversary_title = data.anniversaryTitle;
-        updateData.name = data.anniversaryTitle;
-      }
-      if (Object.keys(updateData).length > 0) {
-        supabase.from('couples').update(updateData).eq('id', couple.id).then();
+    const activeCoupleId =
+      couple.id ||
+      (typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEYS.COUPLE_ID) : null) ||
+      '';
+
+    if (activeCoupleId) {
+      // 1. Call server API endpoint to guarantee update & notify partner
+      fetch('/api/couple/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          coupleId: activeCoupleId,
+          startDate: data.startDate,
+          anniversaryTitle: data.anniversaryTitle,
+          senderName: currentUser.name,
+        }),
+        keepalive: true,
+      })
+        .then((res) => res.json())
+        .then((res) => {
+          if (!res.ok) console.warn('[updateCoupleInfo] API error:', res.error);
+        })
+        .catch((err) => console.warn('[updateCoupleInfo] API fetch error:', err));
+
+      // 2. Direct Supabase update as client-side fallback
+      const sb = supabase;
+      if (sb) {
+        const updateData: any = {};
+        if (data.startDate !== undefined) updateData.start_date = data.startDate;
+        if (data.anniversaryTitle !== undefined) {
+          updateData.anniversary_title = data.anniversaryTitle;
+          updateData.name = data.anniversaryTitle;
+        }
+        if (Object.keys(updateData).length > 0) {
+          sb.from('couples')
+            .update(updateData)
+            .eq('id', activeCoupleId)
+            .then(({ error }) => {
+              if (error && data.startDate !== undefined) {
+                sb.from('couples')
+                  .update({ start_date: data.startDate })
+                  .eq('id', activeCoupleId)
+                  .then();
+              }
+            });
+        }
       }
     }
   };

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppStore } from '@/lib/store/app-store';
 import { Heart, Share2, Copy, Check, Lock, Calendar, Users, Smartphone } from 'lucide-react';
 import { haptic } from '@/lib/telegram';
@@ -22,6 +22,19 @@ export const CoupleSettings: React.FC = () => {
   const [partnerAName, setPartnerAName] = useState(couple?.partnerA?.name || '');
   const [partnerBName, setPartnerBName] = useState(couple?.partnerB?.name || '');
   const [startDate, setStartDate] = useState(couple?.startDate ? couple.startDate.split('T')[0] : '');
+
+  // Keep local inputs in sync when partner updates data remotely
+  useEffect(() => {
+    if (couple?.startDate) {
+      setStartDate(couple.startDate.split('T')[0]);
+    }
+    if (couple?.partnerA?.name) {
+      setPartnerAName(couple.partnerA.name);
+    }
+    if (couple?.partnerB?.name) {
+      setPartnerBName(couple.partnerB.name);
+    }
+  }, [couple?.startDate, couple?.partnerA?.name, couple?.partnerB?.name]);
 
   const inviteCode = couple?.inviteCode || couple?.id || '';
   const inviteLink = botUsername

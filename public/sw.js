@@ -1,7 +1,7 @@
 // Service Worker for "Мы Вместе" PWA
 // Handles Web Push Notifications and Offline-First App Shell Caching
 
-const CACHE_NAME = 'couple-pwa-v2';
+const CACHE_NAME = 'couple-pwa-v3';
 const STATIC_ASSETS = [
   '/',
   '/manifest.webmanifest',
