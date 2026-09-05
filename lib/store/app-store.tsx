@@ -162,6 +162,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
             name: me.name,
             avatar: me.avatar || 'memoji_1',
             role: 'partner_a',
+            notificationsEnabled: me.notifications_enabled !== undefined ? Boolean(me.notifications_enabled) : true,
           },
           partnerB: partner
             ? {
@@ -169,6 +170,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
                 name: partner.name,
                 avatar: partner.avatar || 'memoji_2',
                 role: 'partner_b',
+                notificationsEnabled: partner.notifications_enabled !== undefined ? Boolean(partner.notifications_enabled) : true,
               }
             : {
                 id: 'waiting',
@@ -815,6 +817,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
       const updates: any = {};
       if (data.name !== undefined) updates.name = data.name;
       if (data.avatar !== undefined) updates.avatar = data.avatar;
+      if (data.notificationsEnabled !== undefined) updates.notifications_enabled = data.notificationsEnabled;
       if (Object.keys(updates).length > 0) {
         supabase.from('profiles').update(updates).eq('id', userId).then();
       }

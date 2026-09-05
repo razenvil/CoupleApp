@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
       try {
         const { data: coupleProfiles } = await supabase
           .from('profiles')
-          .select('id, name, telegram_id')
+          .select('id, name, telegram_id, notifications_enabled, is_bot_blocked')
           .eq('couple_id', coupleId);
 
         if (coupleProfiles && coupleProfiles.length > 0) {
@@ -30,13 +30,23 @@ export async function POST(req: NextRequest) {
             return true;
           });
 
-          if (partnerProfile?.telegram_id) {
-            targetChatId = partnerProfile.telegram_id;
+          // Check if partner explicitly disabled notifications or blocked the bot
+          if (partnerProfile) {
+            if (partnerProfile.notifications_enabled === false || partnerProfile.is_bot_blocked) {
+              console.log(`[Notify Route] Partner disabled notifications or blocked bot, skipping Telegram ping.`);
+              return NextResponse.json({ ok: true, delivered: false, reason: 'notifications_disabled' });
+            }
+            if (partnerProfile.telegram_id) {
+              targetChatId = partnerProfile.telegram_id;
+            }
           } else if (coupleProfiles.length >= 2) {
             // Fallback: in a couple of 2, if one has telegram_id and is not senderChatId
             const other = coupleProfiles.find((p: any) => 
               p.telegram_id && (!senderChatId || Number(p.telegram_id) !== Number(senderChatId))
             );
+            if (other?.notifications_enabled === false || other?.is_bot_blocked) {
+              return NextResponse.json({ ok: true, delivered: false, reason: 'notifications_disabled' });
+            }
             if (other?.telegram_id) {
               targetChatId = other.telegram_id;
             }
@@ -181,21 +191,17 @@ export async function POST(req: NextRequest) {
         chat_id: targetChatId,
         text,
         parse_mode: 'HTML',
-        reply_markup: {
-          inline_keyboard: [
-            [
-              {
-                text: '📱 Открыть в «Мы Вместе»',
-                web_app: { url: APP_URL },
-              },
-            ],
-          ],
-        },
       }),
     });
 
     const data = await res.json();
-    return NextResponse.json({ ok: true, delivered: true, data });
+
+    // If bot was blocked by user, mark in profiles
+    if (!data.ok && data.error_code === 403 && supabase) {
+      supabase.from('profiles').update({ is_bot_blocked: true }).eq('telegram_id', targetChatId).then();
+    }
+
+    return NextResponse.json({ ok: true, delivered: Boolean(data.ok), data });
   } catch (error) {
     console.error('Failed to dispatch notification:', error);
     return NextResponse.json({ ok: false, error: 'Internal notification error' }, { status: 500 });

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAppStore } from '@/lib/store/app-store';
-import { Heart, Share2, Copy, Check, Lock, Calendar, Users, Smartphone } from 'lucide-react';
+import { Heart, Share2, Copy, Check, Lock, Calendar, Users, Smartphone, Bell } from 'lucide-react';
 import { haptic } from '@/lib/telegram';
 
 export const CoupleSettings: React.FC = () => {
@@ -219,6 +219,41 @@ export const CoupleSettings: React.FC = () => {
             Заблокировать сейчас
           </button>
         )}
+      </div>
+
+      {/* Telegram Notifications */}
+      <div className="bg-card text-card-foreground rounded-ios-card p-4 border border-border shadow-ios flex items-center justify-between">
+        <div className="flex items-center space-x-2.5">
+          <Bell size={18} className="text-primary" />
+          <div>
+            <span className="text-xs font-bold text-foreground block">
+              Уведомления в Telegram
+            </span>
+            <span className="text-[11px] text-muted-foreground">
+              {currentUser.notificationsEnabled !== false
+                ? 'Бот присылает сообщения о покупках и делах'
+                : 'Оповещения в Telegram отключены'}
+            </span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            haptic.selection();
+            const nextVal = currentUser.notificationsEnabled === false;
+            updateUserProfile(currentUser.id, { notificationsEnabled: nextVal });
+          }}
+          className={`w-12 h-7 rounded-full transition-colors p-1 relative ios-press ${
+            currentUser.notificationsEnabled !== false ? 'bg-primary' : 'bg-muted'
+          }`}
+        >
+          <div
+            className={`w-5 h-5 rounded-full bg-white transition-transform ${
+              currentUser.notificationsEnabled !== false ? 'translate-x-5' : 'translate-x-0'
+            }`}
+          />
+        </button>
       </div>
 
       {/* Account logout */}

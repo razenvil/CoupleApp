@@ -7,6 +7,7 @@ export interface UserProfile {
   name: string;
   avatar: string; // Memoji key or image URL
   role: 'partner_a' | 'partner_b';
+  notificationsEnabled?: boolean;
 }
 
 export interface CoupleInfo {
