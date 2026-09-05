@@ -83,12 +83,40 @@ export const LoginScreen: React.FC = () => {
     const t1 = setTimeout(detectTgUser, 150);
     const t2 = setTimeout(detectTgUser, 500);
 
+    // Pre-create auth session in background for instant 1-click launch
+    fetch('/api/auth/session', { method: 'POST' })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.botUrl) {
+          setTgSessionToken(data.token);
+          setTgBotUrl(data.botUrl);
+        }
+      })
+      .catch(() => {});
+
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
       if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     };
   }, []);
+
+  const openBotUrl = (url: string) => {
+    if (!url || typeof window === 'undefined') return;
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (isMobile) {
+      window.location.href = url;
+    } else {
+      window.open(url, '_blank');
+    }
+  };
+
+  const handleHandshakeSuccess = (user: any) => {
+    haptic.success();
+    // Redirect via URL parameter auth handler in app-store
+    const authUrl = `/?auth_id=${user.id}&couple=${user.couple_id}&name=${encodeURIComponent(user.name)}&avatar=${encodeURIComponent(user.avatar || 'memoji_1')}`;
+    window.location.href = authUrl;
+  };
 
   // Poll and listen for Telegram handshake authorization
   useEffect(() => {
@@ -145,39 +173,32 @@ export const LoginScreen: React.FC = () => {
     };
   }, [isWaitingTg, tgSessionToken]);
 
-  const handleHandshakeSuccess = (user: any) => {
-    haptic.success();
-    // Redirect via URL parameter auth handler in app-store
-    const authUrl = `/?auth_id=${user.id}&couple=${user.couple_id}&name=${encodeURIComponent(user.name)}&avatar=${encodeURIComponent(user.avatar || 'memoji_1')}`;
-    window.location.href = authUrl;
-  };
-
   const startTelegramLogin = async () => {
-    setIsLoading(true);
     setErrorMsg(null);
     haptic.medium();
 
+    // If session is already pre-generated and valid
+    if (tgBotUrl && tgSessionToken) {
+      setIsWaitingTg(true);
+      openBotUrl(tgBotUrl);
+      return;
+    }
+
+    setIsLoading(true);
     try {
       const res = await fetch('/api/auth/session', { method: 'POST' });
       const data = await res.json();
 
-      if (data.success && data.token) {
+      if (data.success && data.botUrl) {
         setTgSessionToken(data.token);
         setTgBotUrl(data.botUrl);
         setIsWaitingTg(true);
-
-        // Open Telegram in new tab or app
-        if (typeof window !== 'undefined') {
-          window.open(data.botUrl, '_blank');
-        }
+        openBotUrl(data.botUrl);
       } else {
-        // Fallback to plain bot link if session endpoint fails
-        if (botUsername && typeof window !== 'undefined') {
-          window.open(`https://t.me/${botUsername}?start=join`, '_blank');
-        }
+        setErrorMsg('Не удалось связаться с Telegram-ботом. Попробуйте еще раз.');
       }
     } catch (e) {
-      setErrorMsg('Не удалось связаться с Telegram. Проверьте подключение.');
+      setErrorMsg('Ошибка соединения. Проверьте интернет.');
     } finally {
       setIsLoading(false);
     }
@@ -286,17 +307,16 @@ export const LoginScreen: React.FC = () => {
             </div>
 
             <div className="space-y-2 pt-1">
-              {tgBotUrl && (
-                <a
-                  href={tgBotUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+              {tgBotUrl ? (
+                <button
+                  type="button"
+                  onClick={() => openBotUrl(tgBotUrl)}
                   className="w-full py-3 rounded-2xl bg-[#2AABEE] text-white font-bold text-xs shadow-md hover:opacity-90 transition-all flex items-center justify-center space-x-1.5 ios-press block text-center"
                 >
                   <Send size={14} className="inline mr-1" />
                   <span>Открыть Telegram-бота повторно</span>
-                </a>
-              )}
+                </button>
+              ) : null}
 
               <button
                 type="button"
@@ -316,23 +336,21 @@ export const LoginScreen: React.FC = () => {
           /* ============================================================= */
           <div className="space-y-4">
             {/* Primary Action: Telegram 1-click login */}
-            {botUsername && (
-              <button
-                type="button"
-                onClick={startTelegramLogin}
-                disabled={isLoading}
-                className="w-full py-3.5 px-4 rounded-[22px] bg-gradient-to-r from-[#2AABEE] to-[#229ED9] text-white font-bold text-sm shadow-md hover:opacity-95 transition-all flex items-center justify-center space-x-2.5 ios-press disabled:opacity-50"
-              >
-                {isLoading ? (
-                  <Loader2 size={18} className="animate-spin" />
-                ) : (
-                  <>
-                    <Send size={17} className="fill-current -rotate-12" />
-                    <span>Войти через Telegram (в 1 клик)</span>
-                  </>
-                )}
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={startTelegramLogin}
+              disabled={isLoading}
+              className="w-full py-3.5 px-4 rounded-[22px] bg-gradient-to-r from-[#2AABEE] to-[#229ED9] text-white font-bold text-sm shadow-md hover:opacity-95 transition-all flex items-center justify-center space-x-2.5 ios-press disabled:opacity-50"
+            >
+              {isLoading ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <>
+                  <Send size={17} className="fill-current -rotate-12" />
+                  <span>Войти через Telegram (в 1 клик)</span>
+                </>
+              )}
+            </button>
 
             {/* Divider */}
             <div className="flex items-center space-x-3 px-2">

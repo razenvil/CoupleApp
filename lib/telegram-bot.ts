@@ -45,3 +45,33 @@ export async function sendPartnerNotification(payload: NotificationPayload) {
     console.warn('Telegram notification dispatch error:', err);
   }
 }
+
+let cachedBotUsername: string | null = null;
+
+export async function getTelegramBotUsername(): Promise<string> {
+  if (cachedBotUsername) return cachedBotUsername;
+
+  if (process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME) {
+    cachedBotUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME;
+    return cachedBotUsername;
+  }
+
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return 'our_couple_bot';
+
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/getMe`);
+    const data = await res.json();
+    if (data.ok && data.result?.username) {
+      const uname = String(data.result.username);
+      cachedBotUsername = uname;
+      return uname;
+    }
+  } catch (e) {
+    console.warn('Failed to fetch bot username:', e);
+  }
+
+  return 'our_couple_bot';
+}
+
+

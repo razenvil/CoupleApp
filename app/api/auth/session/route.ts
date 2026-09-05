@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthSession, getAuthSession } from '@/lib/auth-session';
+import { getTelegramBotUsername } from '@/lib/telegram-bot';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
   try {
     const session = createAuthSession();
-    const botUsername = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || '';
-    const botUrl = botUsername ? `https://t.me/${botUsername}?start=${session.token}` : '';
+    const botUsername = await getTelegramBotUsername();
+    const botUrl = `https://t.me/${botUsername}?start=${session.token}`;
 
     return NextResponse.json({
       success: true,
