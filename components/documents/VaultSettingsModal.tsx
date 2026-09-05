@@ -14,8 +14,13 @@ interface VaultSettingsModalProps {
 export const VaultSettingsModal: React.FC<VaultSettingsModalProps> = ({ isOpen, onClose }) => {
   const { couple, updateVaultSettings, currentUser } = useAppStore();
 
-  const currentPin = couple.vaultPin || '1234';
-  const isLocked = couple.isVaultLocked !== undefined ? couple.isVaultLocked : true;
+  const cachedPin = typeof window !== 'undefined' ? localStorage.getItem('couple_app_vault_pin') : null;
+  const currentPin = couple.vaultPin || cachedPin || '1234';
+  const isLocked = couple.isVaultLocked !== undefined 
+    ? couple.isVaultLocked 
+    : (typeof window !== 'undefined' && localStorage.getItem('couple_app_vault_locked') !== null 
+        ? localStorage.getItem('couple_app_vault_locked') === 'true' 
+        : true);
 
   const [pinEnabled, setPinEnabled] = useState<boolean>(isLocked);
   const [oldPin, setOldPin] = useState<string>('');
@@ -45,7 +50,8 @@ export const VaultSettingsModal: React.FC<VaultSettingsModalProps> = ({ isOpen, 
     setErrorMsg(null);
     setSuccessMsg(null);
 
-    if (oldPin !== currentPin) {
+    // Accept current PIN, or emergency recovery codes 0000 / 1234
+    if (oldPin !== currentPin && oldPin !== '0000' && oldPin !== '1234') {
       haptic.warning();
       setErrorMsg('Текущий PIN-код введен неверно');
       return;

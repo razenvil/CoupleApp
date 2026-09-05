@@ -97,6 +97,8 @@ const STORAGE_KEYS = {
   HEADER_STYLE: 'couple_app_header_style',
   DARK_MODE: 'couple_app_dark_mode',
   COUPLE: 'couple_app_couple_data',
+  VAULT_PIN: 'couple_app_vault_pin',
+  VAULT_LOCKED: 'couple_app_vault_locked',
   DOCUMENTS: 'couple_app_documents',
   WISHLIST: 'couple_app_wishlist',
   TASKS: 'couple_app_tasks',
@@ -185,13 +187,35 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         .maybeSingle();
 
       if (coupleRow) {
-        setCouple((prev) => ({
-          ...prev,
-          startDate: coupleRow.start_date || prev.startDate,
-          anniversaryTitle: coupleRow.anniversary_title || coupleRow.name || prev.anniversaryTitle,
-          vaultPin: coupleRow.vault_pin || prev.vaultPin || '1234',
-          isVaultLocked: coupleRow.is_vault_locked !== undefined ? Boolean(coupleRow.is_vault_locked) : true,
-        }));
+        setCouple((prev) => {
+          const cachedPin =
+            (typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEYS.VAULT_PIN) : null) ||
+            prev.vaultPin;
+          const cachedLocked =
+            typeof window !== 'undefined' && localStorage.getItem(STORAGE_KEYS.VAULT_LOCKED) !== null
+              ? localStorage.getItem(STORAGE_KEYS.VAULT_LOCKED) === 'true'
+              : prev.isVaultLocked;
+
+          const resolvedPin = coupleRow.vault_pin || cachedPin || '1234';
+          if (coupleRow.vault_pin && typeof window !== 'undefined') {
+            localStorage.setItem(STORAGE_KEYS.VAULT_PIN, coupleRow.vault_pin);
+          }
+
+          const resolvedLocked =
+            coupleRow.is_vault_locked !== undefined && coupleRow.is_vault_locked !== null
+              ? Boolean(coupleRow.is_vault_locked)
+              : cachedLocked !== undefined
+              ? cachedLocked
+              : true;
+
+          return {
+            ...prev,
+            startDate: coupleRow.start_date || prev.startDate,
+            anniversaryTitle: coupleRow.anniversary_title || coupleRow.name || prev.anniversaryTitle,
+            vaultPin: resolvedPin,
+            isVaultLocked: resolvedLocked,
+          };
+        });
       }
 
       // 2. Fetch tasks for this couple
@@ -349,8 +373,22 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
         try { setWishlist(JSON.parse(savedWishlist)); } catch (e) {}
       }
       const savedCouple = localStorage.getItem(STORAGE_KEYS.COUPLE);
+      const savedPin = localStorage.getItem(STORAGE_KEYS.VAULT_PIN);
+      const savedLocked = localStorage.getItem(STORAGE_KEYS.VAULT_LOCKED);
+
       if (savedCouple) {
-        try { setCouple(JSON.parse(savedCouple)); } catch (e) {}
+        try {
+          const parsed = JSON.parse(savedCouple);
+          if (savedPin) parsed.vaultPin = savedPin;
+          if (savedLocked !== null) parsed.isVaultLocked = savedLocked === 'true';
+          setCouple(parsed);
+        } catch (e) {}
+      } else if (savedPin || savedLocked !== null) {
+        setCouple((prev) => ({
+          ...prev,
+          vaultPin: savedPin || prev.vaultPin,
+          isVaultLocked: savedLocked !== null ? savedLocked === 'true' : prev.isVaultLocked,
+        }));
       }
       const savedCards = localStorage.getItem(STORAGE_KEYS.LOYALTY_CARDS);
       if (savedCards) {
@@ -702,6 +740,13 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
   const lockDocuments = () => setIsDocumentsUnlocked(false);
 
   const updateCoupleInfo = (data: Partial<CoupleInfo>) => {
+    if (data.vaultPin !== undefined && typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEYS.VAULT_PIN, data.vaultPin);
+    }
+    if (data.isVaultLocked !== undefined && typeof window !== 'undefined') {
+      localStorage.setItem(STORAGE_KEYS.VAULT_LOCKED, String(data.isVaultLocked));
+    }
+
     setCouple((prev) => ({ ...prev, ...data }));
 
     const activeCoupleId =
@@ -718,6 +763,8 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
           coupleId: activeCoupleId,
           startDate: data.startDate,
           anniversaryTitle: data.anniversaryTitle,
+          vaultPin: data.vaultPin,
+          isVaultLocked: data.isVaultLocked,
           senderName: currentUser.name,
         }),
         keepalive: true,
@@ -1000,20 +1047,46 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
 
   // Update Vault Security Settings (PIN code, lock state)
   const updateVaultSettings = async (pin?: string, isLocked?: boolean) => {
+    if (typeof window !== 'undefined') {
+      if (pin !== undefined) localStorage.setItem(STORAGE_KEYS.VAULT_PIN, pin);
+      if (isLocked !== undefined) localStorage.setItem(STORAGE_KEYS.VAULT_LOCKED, String(isLocked));
+    }
+
     setCouple((prev) => ({
       ...prev,
       vaultPin: pin !== undefined ? pin : prev.vaultPin,
       isVaultLocked: isLocked !== undefined ? isLocked : prev.isVaultLocked,
     }));
 
-    if (couple.id && supabase) {
-      const updateData: any = {};
-      if (pin !== undefined) updateData.vault_pin = pin;
-      if (isLocked !== undefined) updateData.is_vault_locked = isLocked;
-      try {
-        await supabase.from('couples').update(updateData).eq('id', couple.id);
-      } catch (err) {
-        console.warn('Could not update vault settings in supabase:', err);
+    const activeCoupleId =
+      couple.id ||
+      (typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEYS.COUPLE_ID) : null) ||
+      '';
+
+    if (activeCoupleId) {
+      // 1. Update via server API (handles retry and partner notify)
+      fetch('/api/couple/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          coupleId: activeCoupleId,
+          vaultPin: pin,
+          isVaultLocked: isLocked,
+          senderName: currentUser.name,
+        }),
+        keepalive: true,
+      }).catch((err) => console.warn('[updateVaultSettings] API error:', err));
+
+      // 2. Direct Supabase update as fallback
+      if (supabase) {
+        const updateData: any = {};
+        if (pin !== undefined) updateData.vault_pin = pin;
+        if (isLocked !== undefined) updateData.is_vault_locked = isLocked;
+        try {
+          await supabase.from('couples').update(updateData).eq('id', activeCoupleId);
+        } catch (err) {
+          console.warn('Could not update vault settings in supabase:', err);
+        }
       }
     }
   };

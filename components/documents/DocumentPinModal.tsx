@@ -23,8 +23,13 @@ export const DocumentPinModal: React.FC<DocumentPinModalProps> = ({
   const [isBiometricSuccess, setIsBiometricSuccess] = useState<boolean>(false);
   const [infoNotice, setInfoNotice] = useState<string | null>(null);
 
-  const correctPin = couple.vaultPin || '1234';
-  const isLocked = couple.isVaultLocked !== undefined ? couple.isVaultLocked : true;
+  const cachedPin = typeof window !== 'undefined' ? localStorage.getItem('couple_app_vault_pin') : null;
+  const correctPin = couple.vaultPin || cachedPin || '1234';
+  const isLocked = couple.isVaultLocked !== undefined 
+    ? couple.isVaultLocked 
+    : (typeof window !== 'undefined' && localStorage.getItem('couple_app_vault_locked') !== null 
+        ? localStorage.getItem('couple_app_vault_locked') === 'true' 
+        : true);
 
   // If vault is not locked, bypass PIN entry immediately
   useEffect(() => {
