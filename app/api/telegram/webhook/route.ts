@@ -486,37 +486,34 @@ export async function POST(req: NextRequest) {
     // 2.2 Command /start
     // ----------------------------------------------------
     if (text.startsWith('/start')) {
-      const isVerified = verifiedUsers.has(fromUser.id);
-
-      if (!isVerified) {
-        const welcomeInviteText = userCoupleCode
-          ? `❤️ Вас пригласили в общее пространство пары (код <b>${userCoupleCode}</b>).\n\n`
-          : '';
-
-        await sendTelegramMessage(
-          chatId,
-          `👋 Привет, <b>${fromUser.first_name}</b>!\n\n${welcomeInviteText}Добро пожаловать в <b>«Мы Вместе»</b> — приватное пространство для вашей пары.\n\n🔒 <b>Безопасный вход:</b>\nЧтобы никто посторонний не получил доступ к вашим документам и билетам, подтвердите вход через номер телефона:`,
-          {
-            keyboard: [
-              [
-                {
-                  text: '📱 Подтвердить номер телефона',
-                  request_contact: true,
-                },
-              ],
-            ],
-            resize_keyboard: true,
-            one_time_keyboard: true,
+      // Ensure user profile exists in Supabase
+      if (fromUser?.id && supabase) {
+        try {
+          const profileData: any = {
+            id: String(fromUser.id),
+            telegram_id: fromUser.id,
+            name: fullName,
+            username: fromUser.username || null,
+          };
+          if (userCoupleCode) {
+            profileData.couple_id = userCoupleCode;
+            profileData.role = 'partner_b';
           }
-        );
-        return NextResponse.json({ ok: true });
+          await supabase.from('profiles').upsert(profileData, { onConflict: 'id' });
+        } catch (e) {
+          console.warn('Upsert on start error:', e);
+        }
       }
+
+      const welcomeInviteText = userCoupleCode
+        ? `❤️ Вы подключаетесь к общему пространству пары (код <b>${userCoupleCode}</b>)!\n\n`
+        : '';
+
+      const adminGreeting = isAdmin ? '\n👑 <i>Вы авторизованы как администратор бота.</i>' : '';
 
       await sendTelegramMessage(
         chatId,
-        `❤️ С возвращением, <b>${fromUser.first_name}</b>!${
-          userCoupleCode ? `\nКод пары: <b>${userCoupleCode}</b>` : ''
-        }\n\nДля входа используйте кнопку <b>«📱 Открыть «Мы Вместе»</b> в нижнем меню:`,
+        `👋 Привет, <b>${fromUser.first_name}</b>!\n\n${welcomeInviteText}Добро пожаловать в <b>«Мы Вместе»</b> — приватное пространство для вашей пары.${adminGreeting}\n\nДля входа используйте кнопку <b>«📱 Открыть «Мы Вместе»</b> в нижнем меню:`,
         persistentKeyboard
       );
       return NextResponse.json({ ok: true });
