@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Sparkles, RefreshCw, Trophy } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useAppStore } from '@/lib/store/app-store';
-import { getAvatarUrl } from '@/lib/avatars';
+import { AvatarImage } from '@/components/common/AvatarImage';
 import { haptic } from '@/lib/telegram';
 
 interface CoinFlipModalProps {
@@ -140,10 +140,11 @@ export const CoinFlipModal: React.FC<CoinFlipModalProps> = ({ isOpen, onClose })
                 <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/30 to-transparent pointer-events-none" />
 
                 <div className="w-20 h-20 rounded-full overflow-hidden ring-2 ring-white/90 shadow-md bg-white/20 mb-1 shrink-0">
-                  <img
-                    src={getAvatarUrl(partnerA.avatar)}
+                  <AvatarImage
+                    src={partnerA.avatar}
                     alt={partnerA.name}
                     className="w-full h-full object-cover"
+                    fallbackSrc="/avatars/memoji_1.png"
                   />
                 </div>
                 <span className="text-xs font-black tracking-wide text-white drop-shadow-md uppercase">
@@ -165,10 +166,11 @@ export const CoinFlipModal: React.FC<CoinFlipModalProps> = ({ isOpen, onClose })
                 <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/30 to-transparent pointer-events-none" />
 
                 <div className="w-20 h-20 rounded-full overflow-hidden ring-2 ring-white/90 shadow-md bg-white/20 mb-1 shrink-0">
-                  <img
-                    src={getAvatarUrl(partnerB.avatar)}
+                  <AvatarImage
+                    src={partnerB.avatar}
                     alt={partnerB.name}
                     className="w-full h-full object-cover"
+                    fallbackSrc="/avatars/memoji_2.png"
                   />
                 </div>
                 <span className="text-xs font-black tracking-wide text-white drop-shadow-md uppercase">

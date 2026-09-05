@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifiedUsers, partnerChatLinks, pendingInvites } from '@/lib/telegram-bot';
 import { supabase } from '@/lib/supabase';
+import { authorizeAuthSession } from '@/lib/auth-session';
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const APP_URL = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://couple-app-phi-ruddy.vercel.app';
@@ -404,21 +405,27 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Parse /start parameter (e.g. /start CP-1234 or /start CP_1234)
+    // Parse /start parameter (e.g. /start CP-1234, /start CP_1234, or /start login_token)
     let startCode: string | null = null;
+    let loginSessionToken: string | null = null;
     if (text.startsWith('/start')) {
       const parts = text.split(' ');
       if (parts.length > 1) {
-        let rawParam = parts[1].trim().toUpperCase();
-        if (rawParam.startsWith('CP_')) {
-          rawParam = rawParam.replace('CP_', 'CP-');
-        } else if (rawParam.startsWith('CP') && !rawParam.startsWith('CP-')) {
-          rawParam = `CP-${rawParam.slice(2)}`;
-        }
-        if (rawParam.startsWith('CP-')) {
-          startCode = rawParam;
-          if (fromUser?.id) pendingInvites.set(String(fromUser.id), rawParam);
-          pendingInvites.set(String(chatId), rawParam);
+        const rawArg = parts[1].trim();
+        if (rawArg.startsWith('login_')) {
+          loginSessionToken = rawArg;
+        } else {
+          let rawParam = rawArg.toUpperCase();
+          if (rawParam.startsWith('CP_')) {
+            rawParam = rawParam.replace('CP_', 'CP-');
+          } else if (rawParam.startsWith('CP') && !rawParam.startsWith('CP-')) {
+            rawParam = `CP-${rawParam.slice(2)}`;
+          }
+          if (rawParam.startsWith('CP-')) {
+            startCode = rawParam;
+            if (fromUser?.id) pendingInvites.set(String(fromUser.id), rawParam);
+            pendingInvites.set(String(chatId), rawParam);
+          }
         }
       }
     }
@@ -431,6 +438,91 @@ export async function POST(req: NextRequest) {
 
     const launchUrl = getWebAppUrl(fromUser, userCoupleCode);
     const persistentKeyboard = getMainKeyboard(launchUrl, notificationsEnabled, isAdmin);
+
+    // ----------------------------------------------------
+    // 2.0 Telegram -> PWA Instant Login (Session Handshake)
+    // ----------------------------------------------------
+    if (loginSessionToken && fromUser?.id) {
+      let resolvedCouple = userCoupleCode;
+      let existingProfile: any = null;
+
+      if (supabase) {
+        try {
+          const { data } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('telegram_id', fromUser.id)
+            .maybeSingle();
+          existingProfile = data;
+          if (data?.couple_id && data.couple_id.startsWith('CP-')) {
+            resolvedCouple = data.couple_id;
+          }
+        } catch (e) {
+          console.warn('Error fetching profile for session auth:', e);
+        }
+      }
+
+      if (!resolvedCouple || !resolvedCouple.startsWith('CP-')) {
+        const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+        let p1 = '', p2 = '';
+        for (let i = 0; i < 4; i++) {
+          p1 += chars.charAt(Math.floor(Math.random() * chars.length));
+          p2 += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        resolvedCouple = `CP-${p1}-${p2}`;
+        if (supabase) {
+          try {
+            await supabase.from('couples').upsert({ id: resolvedCouple, name: 'Наша семья' }, { onConflict: 'id' });
+          } catch {}
+        }
+      }
+
+      const avatar = fromUser.photo_url || existingProfile?.avatar || 'memoji_1';
+      const role = existingProfile?.role || 'partner_a';
+
+      if (supabase) {
+        try {
+          await supabase.from('profiles').upsert({
+            id: String(fromUser.id),
+            telegram_id: fromUser.id,
+            name: fullName,
+            username: fromUser.username || null,
+            avatar,
+            couple_id: resolvedCouple,
+            role,
+          }, { onConflict: 'id' });
+        } catch (e) {
+          console.warn('Error saving profile for session auth:', e);
+        }
+      }
+
+      await authorizeAuthSession(loginSessionToken, {
+        id: String(fromUser.id),
+        telegram_id: fromUser.id,
+        name: fullName,
+        avatar,
+        couple_id: resolvedCouple,
+        role,
+      });
+
+      const webLoginUrl = `${APP_URL}/?auth_id=${fromUser.id}&couple=${resolvedCouple}&name=${encodeURIComponent(fullName)}&avatar=${encodeURIComponent(avatar)}`;
+
+      await sendTelegramMessage(
+        chatId,
+        `✅ <b>Вход в браузере подтверждён!</b>\n\nВы успешно авторизовались в <b>«Мы Вместе»</b> с профиля <b>${fromUser.first_name}</b> (пара <code>${resolvedCouple}</code>).\n\nВкладка на компьютере или в браузере уже открывает приложение! Если этого не произошло, нажмите кнопку ниже:`,
+        {
+          inline_keyboard: [
+            [
+              {
+                text: '🌐 Открыть в браузере',
+                url: webLoginUrl,
+              },
+            ],
+          ],
+        }
+      );
+      return NextResponse.json({ ok: true });
+    }
 
     // ----------------------------------------------------
     // 2.1 User shared contact (Authorization via phone number)

@@ -30,7 +30,8 @@ import { SizesModal } from '@/components/couple/SizesModal';
 import { LoyaltyWalletModal } from '@/components/couple/LoyaltyWalletModal';
 import { InvitePartnerModal } from '@/components/couple/InvitePartnerModal';
 import { AppearanceSettingsModal } from '@/components/couple/AppearanceSettingsModal';
-import { getAvatarUrl } from '@/lib/avatars';
+import { AvatarImage } from '@/components/common/AvatarImage';
+import { PartnerWaitingBanner } from '@/components/couple/PartnerWaitingBanner';
 
 import {
   Plus,
@@ -174,7 +175,10 @@ export default function Home() {
       <HeaderWidget onOpenPwa={() => setIsPwaOpen(true)} />
 
       {/* Main Tab Content with Apple Large Titles */}
-      <main className="max-w-md mx-auto px-5 mt-4">
+      <main className="max-w-md mx-auto px-5 mt-4 space-y-4">
+        {/* Friendly Onboarding: Banner if partner has not joined yet */}
+        <PartnerWaitingBanner />
+
         {/* ================================================================= */}
         {/* TAB 1: ЗАДАЧИ (APPLE REMINDERS INSET GROUPED LIST)                */}
         {/* ================================================================= */}
@@ -496,18 +500,20 @@ export default function Home() {
               <div className="flex items-center space-x-3.5">
                 {/* Overlapping Memojis */}
                 <div className="relative flex items-center">
-                  <div className="w-13 h-13 w-[52px] h-[52px] rounded-full overflow-hidden ring-2 ring-background bg-zinc-800 shadow-md shrink-0">
-                    <img
-                      src={getAvatarUrl(couple.partnerA.avatar)}
+                  <div className="w-[52px] h-[52px] rounded-full overflow-hidden ring-2 ring-background bg-zinc-800 shadow-md shrink-0">
+                    <AvatarImage
+                      src={couple.partnerA.avatar}
                       alt={couple.partnerA.name}
                       className="w-full h-full object-cover"
+                      fallbackSrc="/avatars/memoji_1.png"
                     />
                   </div>
-                  <div className="w-13 h-13 w-[52px] h-[52px] rounded-full overflow-hidden ring-2 ring-background bg-zinc-800 shadow-md -ml-3.5 shrink-0">
-                    <img
-                      src={getAvatarUrl(couple.partnerB.avatar)}
+                  <div className="w-[52px] h-[52px] rounded-full overflow-hidden ring-2 ring-background bg-zinc-800 shadow-md -ml-3.5 shrink-0">
+                    <AvatarImage
+                      src={couple.partnerB.avatar}
                       alt={couple.partnerB.name}
                       className="w-full h-full object-cover"
+                      fallbackSrc="/avatars/memoji_2.png"
                     />
                   </div>
                   <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-primary flex items-center justify-center shadow-md">

@@ -2,7 +2,8 @@
 
 import React from 'react';
 import { useAppStore } from '@/lib/store/app-store';
-import { PRESET_AVATARS, getAvatarUrl } from '@/lib/avatars';
+import { PRESET_AVATARS } from '@/lib/avatars';
+import { AvatarImage } from '@/components/common/AvatarImage';
 import { Check, Sparkles } from 'lucide-react';
 import { haptic } from '@/lib/telegram';
 
@@ -36,10 +37,11 @@ export const AvatarPicker: React.FC = () => {
             Аватар для <strong className="text-foreground">{couple.partnerA.name}</strong>:
           </span>
           <div className="w-8 h-8 rounded-full overflow-hidden ring-2 ring-primary/40 bg-secondary shrink-0 shadow-sm">
-            <img
-              src={getAvatarUrl(couple.partnerA.avatar)}
+            <AvatarImage
+              src={couple.partnerA.avatar}
               alt={couple.partnerA.name}
               className="w-full h-full object-cover"
+              fallbackSrc="/avatars/memoji_1.png"
             />
           </div>
         </div>
@@ -83,10 +85,11 @@ export const AvatarPicker: React.FC = () => {
             Аватар для <strong className="text-foreground">{couple.partnerB.name}</strong>:
           </span>
           <div className="w-8 h-8 rounded-full overflow-hidden ring-2 ring-primary/40 bg-secondary shrink-0 shadow-sm">
-            <img
-              src={getAvatarUrl(couple.partnerB.avatar)}
+            <AvatarImage
+              src={couple.partnerB.avatar}
               alt={couple.partnerB.name}
               className="w-full h-full object-cover"
+              fallbackSrc="/avatars/memoji_2.png"
             />
           </div>
         </div>

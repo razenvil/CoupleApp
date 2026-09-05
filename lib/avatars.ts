@@ -35,7 +35,10 @@ export const PRESET_AVATARS: PresetAvatar[] = [
   { id: 'memoji_50', name: 'Мария (Шатенка)', category: 'girls', url: '/avatars/memoji_50.png' },
 ];
 
-export function getAvatarUrl(avatarId: string): string {
+export function getAvatarUrl(avatarId?: string | null): string {
+  if (!avatarId || typeof avatarId !== 'string') {
+    return PRESET_AVATARS[0].url;
+  }
   // If it's already a full URL or path
   if (avatarId.startsWith('/') || avatarId.startsWith('http')) {
     return avatarId;
@@ -43,3 +46,4 @@ export function getAvatarUrl(avatarId: string): string {
   const found = PRESET_AVATARS.find((a) => a.id === avatarId);
   return found ? found.url : PRESET_AVATARS[0].url;
 }
+

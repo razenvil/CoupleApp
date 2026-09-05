@@ -3,7 +3,7 @@
 import { Heart, Sparkles, UserCheck, Smartphone } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAppStore } from '@/lib/store/app-store';
-import { getAvatarUrl } from '@/lib/avatars';
+import { AvatarImage } from '@/components/common/AvatarImage';
 import { haptic, isTelegramWebApp, isStandalonePwa } from '@/lib/telegram';
 
 interface HeaderWidgetProps {
@@ -32,7 +32,36 @@ export const HeaderWidget: React.FC<HeaderWidgetProps> = ({ onOpenPwa }) => {
     return 'дней';
   };
 
+  const getYearsLabel = (num: number) => {
+    const mod10 = num % 10;
+    const mod100 = num % 100;
+    if (mod100 >= 11 && mod100 <= 19) return 'лет';
+    if (mod10 === 1) return 'год';
+    if (mod10 >= 2 && mod10 <= 4) return 'года';
+    return 'лет';
+  };
+
   const daysWord = getDaysLabel(daysTogether);
+
+  // Check if today is actual anniversary (same day & month, at least 1 day passed)
+  const isAnniversaryDay =
+    now.getDate() === start.getDate() &&
+    now.getMonth() === start.getMonth() &&
+    diffTime >= 1000 * 60 * 60 * 24;
+
+  const yearsTogether = now.getFullYear() - start.getFullYear();
+
+  let headerTitle =
+    couple.anniversaryTitle && couple.anniversaryTitle !== 'Годовщина первого свидания'
+      ? couple.anniversaryTitle
+      : 'Мы вместе';
+
+  if (isAnniversaryDay) {
+    headerTitle =
+      yearsTogether > 0
+        ? `🎉 С годовщиной! ${yearsTogether} ${getYearsLabel(yearsTogether)} вместе`
+        : '🎉 С годовщиной отношений!';
+  }
 
   const handleSwitchUser = () => {
     haptic.medium();
@@ -61,7 +90,7 @@ export const HeaderWidget: React.FC<HeaderWidgetProps> = ({ onOpenPwa }) => {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-1.5 text-xs font-semibold text-muted-foreground">
               <Sparkles size={13} className="text-primary" />
-              <span>{couple.anniversaryTitle || 'Мы вместе'}</span>
+              <span>{headerTitle}</span>
             </div>
 
             <div className="flex items-center gap-1.5">
@@ -82,10 +111,11 @@ export const HeaderWidget: React.FC<HeaderWidgetProps> = ({ onOpenPwa }) => {
               <div className="flex items-center space-x-2 pl-2.5 pr-1.5 py-1 rounded-full bg-secondary/70 border border-border/40 text-xs font-medium text-foreground shadow-xs select-none">
                 <span className="font-bold text-xs">{currentUserName}</span>
                 <div className="w-6 h-6 rounded-full overflow-hidden ring-1 ring-primary/50 bg-secondary shrink-0">
-                  <img
-                    src={getAvatarUrl(currentUserAvatar)}
+                  <AvatarImage
+                    src={currentUserAvatar}
                     alt={currentUserName}
                     className="w-full h-full object-cover"
+                    fallbackSrc="/avatars/memoji_1.png"
                   />
                 </div>
               </div>
@@ -116,17 +146,19 @@ export const HeaderWidget: React.FC<HeaderWidgetProps> = ({ onOpenPwa }) => {
             {/* Overlapping partner avatars with glowing heart */}
             <div className="relative flex items-center pr-2 z-10">
               <div className="w-12 h-12 rounded-full overflow-hidden ring-2 ring-background bg-secondary shadow-sm shrink-0">
-                <img
-                  src={getAvatarUrl(partnerAAvatar)}
+                <AvatarImage
+                  src={partnerAAvatar}
                   alt={partnerAName}
                   className="w-full h-full object-cover"
+                  fallbackSrc="/avatars/memoji_1.png"
                 />
               </div>
               <div className="w-12 h-12 rounded-full overflow-hidden ring-2 ring-background bg-secondary shadow-sm -ml-4 shrink-0">
-                <img
-                  src={getAvatarUrl(partnerBAvatar)}
+                <AvatarImage
+                  src={partnerBAvatar}
                   alt={partnerBName}
                   className="w-full h-full object-cover"
+                  fallbackSrc="/avatars/memoji_2.png"
                 />
               </div>
               <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-primary flex items-center justify-center shadow-md">
@@ -151,17 +183,19 @@ export const HeaderWidget: React.FC<HeaderWidgetProps> = ({ onOpenPwa }) => {
             {/* Overlapping 3D Memojis with Glowing Heart */}
             <div className="relative flex items-center">
               <div className="w-6 h-6 rounded-full overflow-hidden ring-1 ring-white/30 bg-zinc-800 shrink-0">
-                <img
-                  src={getAvatarUrl(partnerAAvatar)}
+                <AvatarImage
+                  src={partnerAAvatar}
                   alt={partnerAName}
                   className="w-full h-full object-cover"
+                  fallbackSrc="/avatars/memoji_1.png"
                 />
               </div>
               <div className="w-6 h-6 rounded-full overflow-hidden ring-1 ring-white/30 bg-zinc-800 -ml-2 shrink-0">
-                <img
-                  src={getAvatarUrl(partnerBAvatar)}
+                <AvatarImage
+                  src={partnerBAvatar}
                   alt={partnerBName}
                   className="w-full h-full object-cover"
+                  fallbackSrc="/avatars/memoji_2.png"
                 />
               </div>
               <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full bg-primary flex items-center justify-center shadow-xs">
@@ -195,10 +229,11 @@ export const HeaderWidget: React.FC<HeaderWidgetProps> = ({ onOpenPwa }) => {
             <div className="flex items-center space-x-2 pl-2.5 pr-1.5 py-1 rounded-full bg-secondary/70 border border-border/40 text-xs font-medium text-foreground shadow-xs select-none">
               <span className="font-bold text-xs">{currentUserName}</span>
               <div className="w-6 h-6 rounded-full overflow-hidden ring-1 ring-primary/50 bg-secondary shrink-0">
-                <img
-                  src={getAvatarUrl(currentUserAvatar)}
+                <AvatarImage
+                  src={currentUserAvatar}
                   alt={currentUserName}
                   className="w-full h-full object-cover"
+                  fallbackSrc="/avatars/memoji_1.png"
                 />
               </div>
             </div>

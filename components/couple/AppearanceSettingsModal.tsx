@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Sliders, Palette, Calendar, UserCheck } from 'lucide-react';
+import { X, Sliders, Palette, Calendar, UserCheck, Sparkles } from 'lucide-react';
 import { ThemePicker } from '@/components/settings/ThemePicker';
 import { AvatarPicker } from '@/components/settings/AvatarPicker';
 import { useAppStore } from '@/lib/store/app-store';
@@ -25,6 +25,11 @@ export const AppearanceSettingsModal: React.FC<AppearanceSettingsModalProps> = (
     updateCoupleInfo({ startDate: new Date(val).toISOString() });
     haptic.light();
   };
+
+  const currentTitle =
+    couple.anniversaryTitle === 'Годовщина первого свидания'
+      ? ''
+      : couple.anniversaryTitle || '';
 
   return (
     <AnimatePresence>
@@ -59,6 +64,24 @@ export const AppearanceSettingsModal: React.FC<AppearanceSettingsModalProps> = (
             <p className="text-xs text-muted-foreground mt-1">
               Оформление приложения, 3D Memoji аватарки и дата пары
             </p>
+          </div>
+
+          {/* Space Title */}
+          <div className="p-4 rounded-2xl ios-inset-grouped space-y-2">
+            <div className="flex items-center space-x-2">
+              <Sparkles size={16} className="text-primary" />
+              <span className="text-xs font-bold text-foreground">Название пространства</span>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Отображается вверху главного экрана (по умолчанию: «Мы вместе»)
+            </p>
+            <input
+              type="text"
+              placeholder="Мы вместе"
+              value={currentTitle}
+              onChange={(e) => updateCoupleInfo({ anniversaryTitle: e.target.value })}
+              className="w-full px-3 py-2 rounded-xl bg-background border border-border/60 text-xs text-foreground font-medium focus:outline-none focus:ring-2 focus:ring-primary/40"
+            />
           </div>
 
           {/* Date of relationship */}

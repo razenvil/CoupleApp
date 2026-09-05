@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '@/lib/store/app-store';
 import { UserSizes } from '@/lib/types';
-import { getAvatarUrl } from '@/lib/avatars';
+import { AvatarImage } from '@/components/common/AvatarImage';
 import { haptic } from '@/lib/telegram';
 
 interface SizesModalProps {
@@ -119,11 +119,14 @@ export const SizesModal: React.FC<SizesModalProps> = ({ isOpen, onClose }) => {
                   : 'text-muted-foreground hover:text-foreground font-medium'
               }`}
             >
-              <img
-                src={getAvatarUrl(partnerUser.avatar)}
-                alt={partnerUser.name}
-                className="w-6 h-6 rounded-full object-cover shrink-0 bg-primary/10"
-              />
+              <div className="w-6 h-6 rounded-full overflow-hidden shrink-0 bg-primary/10">
+                <AvatarImage
+                  src={partnerUser.avatar}
+                  alt={partnerUser.name}
+                  className="w-full h-full object-cover"
+                  fallbackSrc="/avatars/memoji_2.png"
+                />
+              </div>
               <span className="text-xs truncate">{partnerUser.name}</span>
             </button>
 
@@ -140,11 +143,14 @@ export const SizesModal: React.FC<SizesModalProps> = ({ isOpen, onClose }) => {
                   : 'text-muted-foreground hover:text-foreground font-medium'
               }`}
             >
-              <img
-                src={getAvatarUrl(currentUser.avatar)}
-                alt={currentUser.name}
-                className="w-6 h-6 rounded-full object-cover shrink-0 bg-primary/10"
-              />
+              <div className="w-6 h-6 rounded-full overflow-hidden shrink-0 bg-primary/10">
+                <AvatarImage
+                  src={currentUser.avatar}
+                  alt={currentUser.name}
+                  className="w-full h-full object-cover"
+                  fallbackSrc="/avatars/memoji_1.png"
+                />
+              </div>
               <span className="text-xs truncate">Мои размеры</span>
             </button>
           </div>

@@ -5,7 +5,7 @@ import { Check, ChevronDown, ChevronUp, Trash2, Calendar, ShoppingCart, User, Pe
 import { motion, AnimatePresence } from 'framer-motion';
 import { TaskItem as TaskItemType } from '@/lib/types';
 import { useAppStore } from '@/lib/store/app-store';
-import { getAvatarUrl } from '@/lib/avatars';
+import { AvatarImage } from '@/components/common/AvatarImage';
 import { haptic } from '@/lib/telegram';
 import { EditTaskModal } from './EditTaskModal';
 
@@ -108,8 +108,8 @@ export const TaskItem: React.FC<TaskItemProps> = ({
               <div className="flex items-center space-x-1">
                 {assigneeInfo.avatar ? (
                   <div className="w-3.5 h-3.5 rounded-full overflow-hidden shrink-0 bg-secondary">
-                    <img
-                      src={getAvatarUrl(assigneeInfo.avatar)}
+                    <AvatarImage
+                      src={assigneeInfo.avatar}
                       alt={assigneeInfo.label}
                       className="w-full h-full object-cover"
                     />
