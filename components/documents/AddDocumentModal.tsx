@@ -105,7 +105,7 @@ export const AddDocumentModal: React.FC<AddDocumentModalProps> = ({ isOpen, onCl
     setFields((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Real File Upload Handler (Images & PDF)
+  // Real File Upload Handler (Images & PDF with automatic compression)
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -115,13 +115,52 @@ export const AddDocumentModal: React.FC<AddDocumentModalProps> = ({ isOpen, onCl
     const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
     setFileType(isPdf ? 'pdf' : 'image');
 
-    const sizeInMb = (file.size / (1024 * 1024)).toFixed(1);
-    setFileSize(sizeInMb === '0.0' ? `${Math.round(file.size / 1024)} КБ` : `${sizeInMb} МБ`);
-
     const reader = new FileReader();
     reader.onload = () => {
-      setFileUrl(reader.result as string);
-      haptic.success();
+      const rawResult = reader.result as string;
+
+      if (isPdf) {
+        setFileUrl(rawResult);
+        const sizeInMb = (file.size / (1024 * 1024)).toFixed(1);
+        setFileSize(sizeInMb === '0.0' ? `${Math.round(file.size / 1024)} КБ` : `${sizeInMb} МБ`);
+        haptic.success();
+      } else {
+        // Compress image using canvas to avoid localStorage quota issues & speed up sync
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_DIM = 1280;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_DIM) {
+              height = Math.round((height * MAX_DIM) / width);
+              width = MAX_DIM;
+            }
+          } else {
+            if (height > MAX_DIM) {
+              width = Math.round((width * MAX_DIM) / height);
+              height = MAX_DIM;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+
+          // 75% quality JPEG gives crisp readable documents with ~150KB size
+          const compressed = canvas.toDataURL('image/jpeg', 0.75);
+          setFileUrl(compressed);
+
+          const approxBytes = Math.round((compressed.length * 3) / 4);
+          const sizeKb = Math.round(approxBytes / 1024);
+          setFileSize(`${sizeKb} КБ`);
+          haptic.success();
+        };
+        img.src = rawResult;
+      }
     };
     reader.readAsDataURL(file);
   };

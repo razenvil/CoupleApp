@@ -231,23 +231,23 @@ export const InvitePartnerModal: React.FC<InvitePartnerModalProps> = ({ isOpen, 
                 <button
                   type="button"
                   onClick={handleShareLink}
-                  className="w-full py-3.5 px-4 rounded-2xl font-bold text-xs shadow-md transition-all ios-press flex items-center justify-center space-x-2 bg-[#2AABEE] text-white hover:opacity-95"
+                  className="w-full py-3 px-4 rounded-2xl font-bold text-xs shadow-md transition-all ios-press flex items-center justify-center space-x-2 bg-[#2AABEE] text-white hover:opacity-95"
                 >
-                  <Send size={16} />
-                  <span>Отправить ссылку на бота</span>
+                  <Send size={15} />
+                  <span>Отправить ссылку в Telegram</span>
                 </button>
 
                 {botUsername && (
                   <button
                     type="button"
                     onClick={handleCopyBotLink}
-                    className={`w-full py-2.5 px-4 rounded-2xl font-semibold text-xs transition-all ios-press flex items-center justify-center space-x-1.5 ${
+                    className={`w-full py-2 px-4 rounded-2xl font-semibold text-xs transition-all ios-press flex items-center justify-center space-x-1.5 ${
                       copiedBotLink
                         ? 'bg-emerald-500 text-white'
                         : 'text-foreground bg-secondary/80 hover:bg-secondary'
                     }`}
                   >
-                    {copiedBotLink ? <Check size={15} /> : <Copy size={15} />}
+                    {copiedBotLink ? <Check size={14} /> : <Copy size={14} />}
                     <span>{copiedBotLink ? 'Ссылка на бота скопирована!' : 'Скопировать ссылку бота (t.me)'}</span>
                   </button>
                 )}
@@ -255,20 +255,20 @@ export const InvitePartnerModal: React.FC<InvitePartnerModalProps> = ({ isOpen, 
                 <button
                   type="button"
                   onClick={handleCopyLink}
-                  className={`w-full py-2.5 px-4 rounded-2xl font-semibold text-xs transition-all ios-press flex items-center justify-center space-x-1.5 ${
+                  className={`w-full py-2 px-4 rounded-2xl font-semibold text-xs transition-all ios-press flex items-center justify-center space-x-1.5 ${
                     copiedLink
                       ? 'bg-emerald-500 text-white'
                       : 'text-muted-foreground hover:text-foreground bg-secondary/40 hover:bg-secondary'
                   }`}
                 >
                   {copiedLink ? <Check size={14} /> : <Copy size={14} />}
-                  <span>{copiedLink ? 'Веб-ссылка скопирована!' : 'Скопировать веб-ссылку (PWA)'}</span>
+                  <span>{copiedLink ? 'Веб-ссылка скопирована!' : 'Скопировать ссылку на сайт (для браузера / PWA)'}</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={handleCopyCode}
-                  className={`w-full py-2.5 px-4 rounded-2xl font-semibold text-xs transition-all ios-press flex items-center justify-center space-x-1.5 ${
+                  className={`w-full py-2 px-4 rounded-2xl font-semibold text-xs transition-all ios-press flex items-center justify-center space-x-1.5 ${
                     copiedCode
                       ? 'bg-emerald-500 text-white'
                       : 'text-muted-foreground hover:text-foreground bg-secondary/20 hover:bg-secondary'
@@ -277,6 +277,28 @@ export const InvitePartnerModal: React.FC<InvitePartnerModalProps> = ({ isOpen, 
                   {copiedCode ? <Check size={14} /> : <Copy size={14} />}
                   <span>{copiedCode ? 'Код скопирован!' : `Скопировать только код (${inviteCode})`}</span>
                 </button>
+              </div>
+
+              {/* How it works visual guide */}
+              <div className="mt-3 p-3 rounded-2xl bg-secondary/50 border border-border/60 text-left space-y-2">
+                <div className="flex items-center gap-1.5 text-[11px] font-bold text-foreground">
+                  <Sparkles size={13} className="text-primary shrink-0" />
+                  <span>Что значат эти кнопки и как войти:</span>
+                </div>
+                <div className="space-y-1.5 text-[10.5px] text-muted-foreground leading-snug">
+                  <div className="flex items-start gap-1.5">
+                    <span className="font-bold text-primary shrink-0">1.</span>
+                    <span><b>Через Telegram (1 клик):</b> синяя кнопка отправляет ссылку в бот. Партнёр нажимает <i>«Start»</i> и мгновенно входит в вашу пару.</span>
+                  </div>
+                  <div className="flex items-start gap-1.5">
+                    <span className="font-bold text-primary shrink-0">2.</span>
+                    <span><b>Как приложение (PWA):</b> откройте ссылку сайта в Safari (iPhone) или Chrome (Android) → нажмите <i>«Поделиться» → «На экран Домой»</i>.</span>
+                  </div>
+                  <div className="flex items-start gap-1.5">
+                    <span className="font-bold text-primary shrink-0">3.</span>
+                    <span><b>По коду:</b> партнёр может открыть приложение, переключиться сверху на вкладку <i>«Ввести код партнёра»</i> и вбить код <b>{inviteCode}</b>.</span>
+                  </div>
+                </div>
               </div>
             </>
           ) : (
