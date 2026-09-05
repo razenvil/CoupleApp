@@ -624,6 +624,21 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }) {
 
               // Load data for this couple
               loadCoupleData(userCoupleId, activeId);
+
+              // Send PWA installation guide to user's Telegram chat once
+              const pwaGuideKey = `pwa_guide_sent_${tgUser.id}`;
+              if (typeof window !== 'undefined' && !localStorage.getItem(pwaGuideKey)) {
+                localStorage.setItem(pwaGuideKey, 'true');
+                fetch('/api/telegram/pwa-guide', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    telegramId: tgUser.id,
+                    coupleId: userCoupleId,
+                    userName: fullName,
+                  }),
+                }).catch(() => {});
+              }
             } catch (err) {
               console.warn('Profile init error:', err);
             }

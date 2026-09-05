@@ -2,9 +2,9 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Smartphone, Copy, Check, Share, ExternalLink, Sparkles } from 'lucide-react';
+import { X, Smartphone, Copy, Check, Share, ExternalLink, Sparkles, Send, Loader2 } from 'lucide-react';
 import { useAppStore } from '@/lib/store/app-store';
-import { haptic } from '@/lib/telegram';
+import { haptic, isTelegramWebApp } from '@/lib/telegram';
 
 interface PwaModalProps {
   isOpen: boolean;
@@ -14,9 +14,12 @@ interface PwaModalProps {
 export const PwaModal: React.FC<PwaModalProps> = ({ isOpen, onClose }) => {
   const { couple, currentUser } = useAppStore();
   const [copied, setCopied] = useState(false);
+  const [sentToTg, setSentToTg] = useState(false);
+  const [isSendingToTg, setIsSendingToTg] = useState(false);
 
   if (!isOpen) return null;
 
+  const isTg = isTelegramWebApp();
   const origin = typeof window !== 'undefined' ? window.location.origin : 'https://couple-app-phi-ruddy.vercel.app';
   const pwaUrl = `${origin}/?auth_id=${encodeURIComponent(currentUser.id)}&name=${encodeURIComponent(
     currentUser.name
@@ -33,6 +36,42 @@ export const PwaModal: React.FC<PwaModalProps> = ({ isOpen, onClose }) => {
     haptic.light();
     if (typeof window !== 'undefined') {
       window.open(pwaUrl, '_blank');
+    }
+  };
+
+  const handleSendToTg = async () => {
+    haptic.medium();
+    let tgId = 0;
+    if (typeof window !== 'undefined' && window.Telegram?.WebApp?.initDataUnsafe?.user?.id) {
+      tgId = window.Telegram.WebApp.initDataUnsafe.user.id;
+    } else {
+      tgId = Number(currentUser.id) || 0;
+    }
+
+    if (!tgId) return;
+
+    setIsSendingToTg(true);
+    try {
+      const res = await fetch('/api/telegram/pwa-guide', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          telegramId: tgId,
+          coupleId: couple.id,
+          userName: currentUser.name,
+          force: true,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSentToTg(true);
+        haptic.success();
+        setTimeout(() => setSentToTg(false), 3000);
+      }
+    } catch (e) {
+      console.warn('Failed to send PWA guide to tg:', e);
+    } finally {
+      setIsSendingToTg(false);
     }
   };
 
@@ -98,6 +137,32 @@ export const PwaModal: React.FC<PwaModalProps> = ({ isOpen, onClose }) => {
               {copied ? <Check size={16} /> : <Copy size={16} />}
               <span>{copied ? 'Ссылка для входа скопирована!' : 'Скопировать персональную ссылку для PWA'}</span>
             </button>
+
+            {isTg && (
+              <button
+                type="button"
+                onClick={handleSendToTg}
+                disabled={isSendingToTg}
+                className="w-full py-2.5 rounded-2xl bg-[#2AABEE]/15 hover:bg-[#2AABEE]/25 text-[#2AABEE] font-bold text-xs border border-[#2AABEE]/30 flex items-center justify-center space-x-1.5 ios-press transition-colors disabled:opacity-50"
+              >
+                {sentToTg ? (
+                  <>
+                    <Check size={14} className="text-emerald-500" />
+                    <span>Инструкция отправлена вам в чат бота!</span>
+                  </>
+                ) : isSendingToTg ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    <span>Отправка...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send size={14} />
+                    <span>Отправить инструкцию мне в Telegram</span>
+                  </>
+                )}
+              </button>
+            )}
 
             <button
               onClick={handleOpenBrowser}
